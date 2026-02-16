@@ -1,397 +1,374 @@
 // This Pine Script™ source code is subject to the terms of the Mozilla Public License 2.0
 // https://mozilla.org/MPL/2.0/
-// © Robin - EMA Fractal Expert Advisor v2.0
-// Verbesserungen: Halber SL, Zeitfilter, Short-Variante, Partielles TP 50%
+// © Robin - EMA Fractal Expert Advisor v3.0
+// Neu: 4 Trailing-Methoden, konfigurierbares Risiko, Partial-TP Modi, Range-Filter
 
 //@version=6
-strategy("EMA Fractal EA v2", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=2, initial_capital=10000, commission_type=strategy.commission.percent, commission_value=0.01, slippage=1)
+strategy("EMA Fractal EA v3", overlay=true, default_qty_type=strategy.percent_of_equity,
+         default_qty_value=1, initial_capital=10000,
+         commission_type=strategy.commission.percent, commission_value=0.01, slippage=1)
 
 // ============================================================================
-// INPUTS - Einstellungen
+// INPUTS
 // ============================================================================
 
-// --- EMA Einstellungen ---
 grp_ema = "EMA Einstellungen"
-ema_fast_len   = input.int(10, "Schnelle EMA Länge", minval=1, group=grp_ema)
-ema_mid_len    = input.int(20, "Mittlere EMA Länge", minval=1, group=grp_ema)
-ema_slow_len   = input.int(50, "Langsame EMA Länge", minval=1, group=grp_ema)
+ema_fast_len = input.int(10, "Schnelle EMA", minval=1, group=grp_ema)
+ema_mid_len  = input.int(20, "Mittlere EMA", minval=1, group=grp_ema)
+ema_slow_len = input.int(50, "Langsame EMA", minval=1, group=grp_ema)
 
-// --- Richtung ---
 grp_dir = "Handelsrichtung"
-trade_long  = input.bool(true, "Long Trades aktivieren", group=grp_dir)
-trade_short = input.bool(true, "Short Trades aktivieren", group=grp_dir)
+trade_long  = input.bool(true, "Long Trades", group=grp_dir)
+trade_short = input.bool(true, "Short Trades", group=grp_dir)
 
-// --- Fractal Einstellungen ---
-grp_frac = "Fractal Einstellungen"
-fractal_lookback    = input.int(2, "Fractal Lookback (Kerzen links/rechts)", minval=1, maxval=5, group=grp_frac)
-max_candles_fractal = input.int(10, "Max Kerzen nach Cross für Fractal", minval=1, maxval=50, group=grp_frac)
+grp_frac = "Fractal"
+fractal_lookback    = input.int(2, "Lookback", minval=1, maxval=5, group=grp_frac)
+max_candles_fractal = input.int(10, "Max Kerzen für Fractal", minval=1, maxval=50, group=grp_frac)
 
-// --- Filter: Abstand Fractal zu EMA20 ---
-grp_filter = "Abstandsfilter Fractal zu EMA20"
-use_distance_filter     = input.bool(true, "Abstandsfilter aktivieren", group=grp_filter)
-max_distance_pct        = input.float(0.5, "Max Abstand Fractal zu EMA20 (%)", minval=0.01, maxval=5.0, step=0.05, group=grp_filter)
+grp_filter = "Abstandsfilter"
+use_distance_filter = input.bool(true, "Aktivieren", group=grp_filter)
+max_distance_pct    = input.float(0.5, "Max Abstand (%)", minval=0.01, maxval=5.0, step=0.05, group=grp_filter)
 
-// --- Stop Loss Einstellungen ---
-grp_sl = "Stop Loss Einstellungen"
-sl_mode = input.string("Halber Abstand Fractal Low", "SL Modus", options=["Volles Fractal Low", "Halber Abstand Fractal Low"], group=grp_sl)
+grp_sl = "Stop Loss"
+sl_mode = input.string("Halber Abstand", "SL Modus", options=["Volles Fractal Low", "Halber Abstand"], group=grp_sl)
 
-// --- Breakeven & Trailing & Partielles TP ---
-grp_trail = "Trailing / Breakeven / Partielles TP"
-use_breakeven   = input.bool(true, "Breakeven nach erstem Fractal-Durchbruch", group=grp_trail)
-use_partial_tp  = input.bool(true, "Partielles TP bei Breakeven (50%)", group=grp_trail)
-partial_tp_pct  = input.float(50.0, "Anteil schließen bei Breakeven (%)", minval=10, maxval=90, step=5, group=grp_trail)
+grp_risk = "Risiko Management"
+risk_pct = input.float(1.0, "Risiko pro Trade (%)", minval=0.1, maxval=5.0, step=0.1, group=grp_risk)
 
-// --- Zeitfilter ---
-grp_time = "Zeitfilter (Session)"
-use_session_filter = input.bool(true, "Zeitfilter aktivieren", group=grp_time)
-session_start      = input.int(8, "Session Start (UTC Stunde)", minval=0, maxval=23, group=grp_time)
-session_end        = input.int(20, "Session Ende (UTC Stunde)", minval=0, maxval=23, group=grp_time)
+grp_trail = "Trailing Stop"
+trail_mode     = input.string("ATR", "Trailing Methode", options=["Fractal", "ATR", "Chandelier", "EMA"], group=grp_trail)
+atr_period     = input.int(14, "ATR Periode", minval=1, group=grp_trail)
+atr_mult       = input.float(2.0, "ATR/Chandelier Multiplikator", minval=0.5, maxval=5.0, step=0.1, group=grp_trail)
+ema_trail_len  = input.int(10, "EMA Trail Periode", minval=1, group=grp_trail)
 
-// ============================================================================
-// ZEITFILTER - London/NY Session
-// ============================================================================
+grp_be = "Breakeven & Partial TP"
+use_breakeven  = input.bool(true, "Breakeven aktivieren", group=grp_be)
+partial_mode   = input.string("Breakeven", "Partial-TP Modus", options=["Breakeven", "Trail-Hit"], group=grp_be)
+partial_tp_pct = input.float(50.0, "Anteil schließen (%)", minval=10, maxval=90, step=5, group=grp_be)
 
-current_hour = hour(time, "UTC")
-in_session = not use_session_filter or (current_hour >= session_start and current_hour < session_end)
+grp_time = "Zeitfilter"
+use_session = input.bool(true, "Zeitfilter aktivieren", group=grp_time)
+sess_start  = input.int(8, "Start (UTC)", minval=0, maxval=23, group=grp_time)
+sess_end    = input.int(20, "Ende (UTC)", minval=0, maxval=23, group=grp_time)
 
 // ============================================================================
-// MULTI-TIMEFRAME EMA BERECHNUNG
+// BERECHNUNGEN
 // ============================================================================
 
-// --- Wöchentliche EMAs ---
+// Session
+cur_hour = hour(time, "UTC")
+in_session = not use_session or (cur_hour >= sess_start and cur_hour < sess_end)
+
+// HTF EMAs
 w_ema10 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_fast_len), lookahead=barmerge.lookahead_off)
 w_ema20 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_mid_len), lookahead=barmerge.lookahead_off)
 w_ema50 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_slow_len), lookahead=barmerge.lookahead_off)
-
-// --- Tägliche EMAs ---
 d_ema10 = request.security(syminfo.tickerid, "D", ta.ema(close, ema_fast_len), lookahead=barmerge.lookahead_off)
 d_ema20 = request.security(syminfo.tickerid, "D", ta.ema(close, ema_mid_len), lookahead=barmerge.lookahead_off)
 
-// --- H2 EMAs (Chart-Timeframe sollte H2 = 120 sein) ---
+// H2 EMAs
 h2_ema10 = ta.ema(close, ema_fast_len)
 h2_ema20 = ta.ema(close, ema_mid_len)
+h2_ema_trail = ta.ema(close, ema_trail_len)
 
-// ============================================================================
-// SCANNER BEDINGUNGEN
-// ============================================================================
+// ATR
+atr_val = ta.atr(atr_period)
 
-// --- LONG Bedingungen ---
+// Scanner
 cond_w_bull = w_ema10 > w_ema20 and w_ema20 > w_ema50
 cond_d_bull = d_ema10 > d_ema20
-cond_h2_pullback_bull = h2_ema10 < h2_ema20
 htf_bullish = cond_w_bull and cond_d_bull
 
-// --- SHORT Bedingungen (gespiegelt) ---
 cond_w_bear = w_ema10 < w_ema20 and w_ema20 < w_ema50
 cond_d_bear = d_ema10 < d_ema20
-cond_h2_pullback_bear = h2_ema10 > h2_ema20
 htf_bearish = cond_w_bear and cond_d_bear
 
-// ============================================================================
-// CROSS ERKENNUNG
-// ============================================================================
+// Cross
+cross_above = close > h2_ema20 and close[1] <= h2_ema20[1]
+cross_below = close < h2_ema20 and close[1] >= h2_ema20[1]
 
-// LONG: Close über EMA20
-cross_above_ema20 = close > h2_ema20 and close[1] <= h2_ema20[1]
-
-// SHORT: Close unter EMA20
-cross_below_ema20 = close < h2_ema20 and close[1] >= h2_ema20[1]
-
-// Setup Signale
-setup_long  = trade_long  and htf_bullish  and cond_h2_pullback_bull and cross_above_ema20 and in_session
-setup_short = trade_short and htf_bearish  and cond_h2_pullback_bear and cross_below_ema20 and in_session
+setup_long  = trade_long  and htf_bullish and h2_ema10 < h2_ema20 and cross_above and in_session
+setup_short = trade_short and htf_bearish and h2_ema10 > h2_ema20 and cross_below and in_session
 
 // ============================================================================
-// FRACTAL ERKENNUNG (Williams Fractals)
+// FRACTALS
 // ============================================================================
 
-is_fractal_high(n) =>
-    result = true
+is_frac_high(n) =>
+    r = true
     for i = 1 to n
         if high[n] <= high[n - i] or high[n] <= high[n + i]
-            result := false
-    result
+            r := false
+    r
 
-is_fractal_low(n) =>
-    result = true
+is_frac_low(n) =>
+    r = true
     for i = 1 to n
         if low[n] >= low[n - i] or low[n] >= low[n + i]
-            result := false
-    result
+            r := false
+    r
 
-fractal_high_detected = is_fractal_high(fractal_lookback)
-fractal_low_detected  = is_fractal_low(fractal_lookback)
-
-fractal_high_price = fractal_high_detected ? high[fractal_lookback] : na
-fractal_low_price  = fractal_low_detected  ? low[fractal_lookback]  : na
+fh_det = is_frac_high(fractal_lookback)
+fl_det = is_frac_low(fractal_lookback)
+fh_price = fh_det ? high[fractal_lookback] : na
+fl_price = fl_det ? low[fractal_lookback] : na
 
 // ============================================================================
 // ZUSTANDSMASCHINE
 // ============================================================================
 
-// --- Persistent Variablen ---
-var int   bars_since_setup      = na
-var bool  waiting_for_fractal   = false
-var int   trade_direction       = 0        // 1 = Long, -1 = Short
-var float entry_price           = na
-var float stop_loss_price       = na
-var float last_fractal_low      = na
-var float last_fractal_high_val = na
-var bool  order_pending         = false
-var bool  breakeven_active      = false
-var float trailing_sl           = na
-var bool  first_fractal_break   = false
-var bool  partial_closed        = false
+var int   bars_setup    = na
+var bool  waiting       = false
+var int   trade_dir     = 0
+var float entry_px      = na
+var float sl_px         = na
+var float last_fl       = na
+var float last_fh       = na
+var bool  order_pend    = false
+var bool  be_active     = false
+var float trail_sl      = na
+var bool  partial_done  = false
 
-// --- Fractal Tracking ---
-if fractal_low_detected
-    last_fractal_low := fractal_low_price
-if fractal_high_detected
-    last_fractal_high_val := fractal_high_price
+if fl_det
+    last_fl := fl_price
+if fh_det
+    last_fh := fh_price
 
-// ============================================================================
-// SCHRITT 1: Setup-Signal → Warten auf Fractal
-// ============================================================================
+// --- Setup ---
+if setup_long and not waiting and strategy.position_size == 0 and not order_pend
+    waiting   := true
+    bars_setup := 0
+    trade_dir := 1
 
-// LONG Setup
-if setup_long and not waiting_for_fractal and strategy.position_size == 0 and not order_pending
-    waiting_for_fractal := true
-    bars_since_setup    := 0
-    trade_direction     := 1
+if setup_short and not waiting and strategy.position_size == 0 and not order_pend
+    waiting   := true
+    bars_setup := 0
+    trade_dir := -1
 
-// SHORT Setup
-if setup_short and not waiting_for_fractal and strategy.position_size == 0 and not order_pending
-    waiting_for_fractal := true
-    bars_since_setup    := 0
-    trade_direction     := -1
+if waiting
+    bars_setup += 1
+if waiting and bars_setup > max_candles_fractal
+    waiting   := false
+    bars_setup := na
+    trade_dir := 0
 
-// Zähler
-if waiting_for_fractal
-    bars_since_setup += 1
-
-// Timeout
-if waiting_for_fractal and bars_since_setup > max_candles_fractal
-    waiting_for_fractal := false
-    bars_since_setup    := na
-    trade_direction     := 0
-
-// ============================================================================
-// SCHRITT 2: Fractal gefunden → Order setzen
-// ============================================================================
-
-// --- LONG: Oberes Fractal → Buystop ---
-if waiting_for_fractal and trade_direction == 1 and fractal_high_detected and bars_since_setup <= max_candles_fractal
-    dist_pct = math.abs(fractal_high_price - h2_ema20) / h2_ema20 * 100
-
-    if not use_distance_filter or dist_pct <= max_distance_pct
-        entry_price := fractal_high_price
-
+// --- Fractal → Order ---
+if waiting and trade_dir == 1 and fh_det and bars_setup <= max_candles_fractal
+    dp = math.abs(fh_price - h2_ema20) / h2_ema20 * 100
+    if not use_distance_filter or dp <= max_distance_pct
+        entry_px := fh_price
         if sl_mode == "Volles Fractal Low"
-            stop_loss_price := last_fractal_low
+            sl_px := last_fl
         else
-            stop_loss_price := entry_price - (entry_price - last_fractal_low) / 2
+            sl_px := entry_px - (entry_px - last_fl) / 2
+        if not na(sl_px) and sl_px < entry_px
+            order_pend   := true
+            waiting      := false
+            bars_setup   := na
+            be_active    := false
+            partial_done := false
 
-        if not na(stop_loss_price) and stop_loss_price < entry_price
-            order_pending       := true
-            waiting_for_fractal := false
-            bars_since_setup    := na
-            breakeven_active    := false
-            first_fractal_break := false
-            partial_closed      := false
-
-// --- SHORT: Unteres Fractal → Sellstop ---
-if waiting_for_fractal and trade_direction == -1 and fractal_low_detected and bars_since_setup <= max_candles_fractal
-    dist_pct = math.abs(fractal_low_price - h2_ema20) / h2_ema20 * 100
-
-    if not use_distance_filter or dist_pct <= max_distance_pct
-        entry_price := fractal_low_price
-
+if waiting and trade_dir == -1 and fl_det and bars_setup <= max_candles_fractal
+    dp = math.abs(fl_price - h2_ema20) / h2_ema20 * 100
+    if not use_distance_filter or dp <= max_distance_pct
+        entry_px := fl_price
         if sl_mode == "Volles Fractal Low"
-            stop_loss_price := last_fractal_high_val
+            sl_px := last_fh
         else
-            stop_loss_price := entry_price + (last_fractal_high_val - entry_price) / 2
+            sl_px := entry_px + (last_fh - entry_px) / 2
+        if not na(sl_px) and sl_px > entry_px
+            order_pend   := true
+            waiting      := false
+            bars_setup   := na
+            be_active    := false
+            partial_done := false
 
-        if not na(stop_loss_price) and stop_loss_price > entry_price
-            order_pending       := true
-            waiting_for_fractal := false
-            bars_since_setup    := na
-            breakeven_active    := false
-            first_fractal_break := false
-            partial_closed      := false
+// --- Order ausführen ---
+if order_pend and strategy.position_size == 0
+    // Positionsgröße basierend auf Risiko %
+    risk_amount = strategy.equity * risk_pct / 100
+    sl_distance = math.abs(entry_px - sl_px)
+    qty = sl_distance > 0 ? risk_amount / sl_distance : 0
 
-// ============================================================================
-// SCHRITT 3: Order ausführen
-// ============================================================================
+    if trade_dir == 1 and qty > 0
+        strategy.entry("Long", strategy.long, qty=qty, stop=entry_px)
+        strategy.exit("SL Long", "Long", stop=sl_px)
+    else if trade_dir == -1 and qty > 0
+        strategy.entry("Short", strategy.short, qty=qty, stop=entry_px)
+        strategy.exit("SL Short", "Short", stop=sl_px)
 
-if order_pending and strategy.position_size == 0
-    if trade_direction == 1
-        strategy.entry("BuyStop", strategy.long, stop=entry_price)
-        strategy.exit("Initial SL", "BuyStop", stop=stop_loss_price)
-    else if trade_direction == -1
-        strategy.entry("SellStop", strategy.short, stop=entry_price)
-        strategy.exit("Initial SL Short", "SellStop", stop=stop_loss_price)
+if order_pend and strategy.position_size != 0
+    order_pend := false
+    trail_sl   := sl_px
 
-// Order gefüllt
-if order_pending and strategy.position_size != 0
-    order_pending := false
-    trailing_sl   := stop_loss_price
-
-// HTF Bedingung verloren → Order canceln
-if order_pending
-    should_cancel = (trade_direction == 1 and not htf_bullish) or (trade_direction == -1 and not htf_bearish)
-    if should_cancel
+if order_pend
+    cancel_it = (trade_dir == 1 and not htf_bullish) or (trade_dir == -1 and not htf_bearish)
+    if cancel_it
         strategy.cancel_all()
-        order_pending   := false
-        entry_price     := na
-        stop_loss_price := na
-        trade_direction := 0
+        order_pend := false
+        entry_px   := na
+        sl_px      := na
+        trade_dir  := 0
 
 // ============================================================================
-// SCHRITT 4: Trailing SL
+// TRAILING SL (4 Methoden)
 // ============================================================================
 
-// --- LONG: Trail unter Fractal Low ---
-if strategy.position_size > 0 and trade_direction == 1 and fractal_low_detected
-    new_trail = fractal_low_price
-    if not na(new_trail) and (na(trailing_sl) or new_trail > trailing_sl)
-        trailing_sl := new_trail
-        if partial_closed
-            strategy.exit("Trailing SL Rest", "BuyStop", stop=trailing_sl)
-        else
-            strategy.exit("Trailing SL", "BuyStop", stop=trailing_sl)
+// --- LONG Trailing ---
+if strategy.position_size > 0 and trade_dir == 1
+    if trail_mode == "Fractal" and fl_det and not na(fl_price)
+        if fl_price > trail_sl
+            trail_sl := fl_price
+    else if trail_mode == "ATR"
+        new_sl = close - atr_val * atr_mult
+        if new_sl > trail_sl
+            trail_sl := new_sl
+    else if trail_mode == "Chandelier"
+        highest = ta.highest(high, atr_period)
+        new_sl = highest - atr_val * atr_mult
+        if new_sl > trail_sl
+            trail_sl := new_sl
+    else if trail_mode == "EMA" and not na(h2_ema_trail)
+        if h2_ema_trail > trail_sl
+            trail_sl := h2_ema_trail
 
-// --- SHORT: Trail über Fractal High ---
-if strategy.position_size < 0 and trade_direction == -1 and fractal_high_detected
-    new_trail = fractal_high_price
-    if not na(new_trail) and (na(trailing_sl) or new_trail < trailing_sl)
-        trailing_sl := new_trail
-        if partial_closed
-            strategy.exit("Trailing SL Rest Short", "SellStop", stop=trailing_sl)
-        else
-            strategy.exit("Trailing SL Short", "SellStop", stop=trailing_sl)
+    // SL Exit aktualisieren
+    if partial_done
+        strategy.exit("Trail Rest Long", "Long", stop=trail_sl)
+    else
+        strategy.exit("Trail Long", "Long", stop=trail_sl)
+
+// --- SHORT Trailing ---
+if strategy.position_size < 0 and trade_dir == -1
+    if trail_mode == "Fractal" and fh_det and not na(fh_price)
+        if fh_price < trail_sl
+            trail_sl := fh_price
+    else if trail_mode == "ATR"
+        new_sl = close + atr_val * atr_mult
+        if new_sl < trail_sl
+            trail_sl := new_sl
+    else if trail_mode == "Chandelier"
+        lowest = ta.lowest(low, atr_period)
+        new_sl = lowest + atr_val * atr_mult
+        if new_sl < trail_sl
+            trail_sl := new_sl
+    else if trail_mode == "EMA" and not na(h2_ema_trail)
+        if h2_ema_trail < trail_sl
+            trail_sl := h2_ema_trail
+
+    if partial_done
+        strategy.exit("Trail Rest Short", "Short", stop=trail_sl)
+    else
+        strategy.exit("Trail Short", "Short", stop=trail_sl)
 
 // ============================================================================
-// SCHRITT 5: Breakeven + Partielles TP (50%)
+// BREAKEVEN & PARTIAL TP
 // ============================================================================
 
-// --- LONG Breakeven & Partial TP ---
-if strategy.position_size > 0 and trade_direction == 1 and use_breakeven and not breakeven_active
-    if not na(entry_price) and close > entry_price and not first_fractal_break
-        first_fractal_break := true
-        breakeven_active    := true
+// --- LONG ---
+if strategy.position_size > 0 and trade_dir == 1 and use_breakeven and not be_active
+    if not na(entry_px) and close > entry_px
+        be_active := true
+        if entry_px > trail_sl
+            trail_sl := entry_px
 
-        // Trailing SL auf Breakeven setzen
-        if na(trailing_sl) or entry_price > trailing_sl
-            trailing_sl := entry_price
-
-        // Partielles TP: 50% schließen
-        if use_partial_tp and not partial_closed
+        if partial_mode == "Breakeven" and not partial_done
             close_qty = math.round(strategy.position_size * partial_tp_pct / 100, 2)
             if close_qty > 0
-                strategy.close("BuyStop", qty=close_qty, comment="Partial TP 50%")
-                partial_closed := true
+                strategy.close("Long", qty=close_qty, comment="Partial TP")
+                partial_done := true
 
-        // SL für verbleibende Position
-        strategy.exit("BE Trail", "BuyStop", stop=trailing_sl)
+        strategy.exit("BE Long", "Long", stop=trail_sl)
 
-// --- SHORT Breakeven & Partial TP ---
-if strategy.position_size < 0 and trade_direction == -1 and use_breakeven and not breakeven_active
-    if not na(entry_price) and close < entry_price and not first_fractal_break
-        first_fractal_break := true
-        breakeven_active    := true
+// --- SHORT ---
+if strategy.position_size < 0 and trade_dir == -1 and use_breakeven and not be_active
+    if not na(entry_px) and close < entry_px
+        be_active := true
+        if entry_px < trail_sl
+            trail_sl := entry_px
 
-        if na(trailing_sl) or entry_price < trailing_sl
-            trailing_sl := entry_price
-
-        if use_partial_tp and not partial_closed
+        if partial_mode == "Breakeven" and not partial_done
             close_qty = math.round(math.abs(strategy.position_size) * partial_tp_pct / 100, 2)
             if close_qty > 0
-                strategy.close("SellStop", qty=close_qty, comment="Partial TP 50% Short")
-                partial_closed := true
+                strategy.close("Short", qty=close_qty, comment="Partial TP")
+                partial_done := true
 
-        strategy.exit("BE Trail Short", "SellStop", stop=trailing_sl)
-
-// ============================================================================
-// Position komplett geschlossen → Reset
-// ============================================================================
-
-if strategy.position_size == 0 and not order_pending
-    trade_direction     := 0
-    breakeven_active    := false
-    first_fractal_break := false
-    partial_closed      := false
-    trailing_sl         := na
-    entry_price         := na
-    stop_loss_price     := na
+        strategy.exit("BE Short", "Short", stop=trail_sl)
 
 // ============================================================================
-// PLOTS & VISUALISIERUNG
+// RESET
 // ============================================================================
 
-// EMAs
-plot(h2_ema10, "H2 EMA10", color=color.new(color.blue, 0), linewidth=1)
-plot(h2_ema20, "H2 EMA20", color=color.new(color.orange, 0), linewidth=2)
+if strategy.position_size == 0 and not order_pend
+    trade_dir    := 0
+    be_active    := false
+    partial_done := false
+    trail_sl     := na
+    entry_px     := na
+    sl_px        := na
 
-// Fractals
-plotshape(fractal_high_detected, "Fractal High", shape.triangledown, location.abovebar, color.new(color.green, 30), offset=-fractal_lookback, size=size.tiny)
-plotshape(fractal_low_detected, "Fractal Low", shape.triangleup, location.belowbar, color.new(color.red, 30), offset=-fractal_lookback, size=size.tiny)
+// ============================================================================
+// PLOTS
+// ============================================================================
 
-// Setup Signale
-plotshape(setup_long, "Long Setup", shape.diamond, location.belowbar, color.new(color.lime, 0), size=size.small, text="L")
-plotshape(setup_short, "Short Setup", shape.diamond, location.abovebar, color.new(color.fuchsia, 0), size=size.small, text="S")
+plot(h2_ema10, "EMA10", color.blue, 1)
+plot(h2_ema20, "EMA20", color.orange, 2)
+plot(trail_mode == "EMA" ? h2_ema_trail : na, "EMA Trail", color.new(color.purple, 50), 1)
 
-// Hintergrund
-bgcolor(htf_bullish ? color.new(color.green, 93) : htf_bearish ? color.new(color.red, 93) : na, title="HTF Trend")
-bgcolor(waiting_for_fractal ? color.new(color.yellow, 90) : na, title="Warte auf Fractal")
-bgcolor(not in_session and use_session_filter ? color.new(color.gray, 95) : na, title="Außerhalb Session")
+plotshape(fh_det, "FH", shape.triangledown, location.abovebar, color.new(color.green, 30), offset=-fractal_lookback, size=size.tiny)
+plotshape(fl_det, "FL", shape.triangleup, location.belowbar, color.new(color.red, 30), offset=-fractal_lookback, size=size.tiny)
 
-// Trailing SL
-plot(strategy.position_size != 0 ? trailing_sl : na, "Trailing SL", color=color.red, linewidth=2, style=plot.style_stepline)
+plotshape(setup_long, "Long", shape.diamond, location.belowbar, color.lime, size=size.small, text="L")
+plotshape(setup_short, "Short", shape.diamond, location.abovebar, color.fuchsia, size=size.small, text="S")
 
-// Pending Order
-plot(order_pending and trade_direction == 1 ? entry_price : na, "Pending BuyStop", color=color.lime, linewidth=1, style=plot.style_cross)
-plot(order_pending and trade_direction == -1 ? entry_price : na, "Pending SellStop", color=color.fuchsia, linewidth=1, style=plot.style_cross)
+bgcolor(htf_bullish ? color.new(color.green, 93) : htf_bearish ? color.new(color.red, 93) : na)
+bgcolor(not in_session and use_session ? color.new(color.gray, 95) : na)
+
+plot(strategy.position_size != 0 ? trail_sl : na, "Trail SL", color.red, 2, plot.style_stepline)
+plot(order_pend ? entry_px : na, "Pending", color.new(color.yellow, 0), 1, plot.style_cross)
 
 // ============================================================================
 // INFO-TABELLE
 // ============================================================================
 
-var table info = table.new(position.top_right, 2, 11, bgcolor=color.new(color.black, 80), frame_width=1, frame_color=color.gray)
+var table info = table.new(position.top_right, 2, 12, bgcolor=color.new(color.black, 80), frame_width=1, frame_color=color.gray)
 
 if barstate.islast
-    table.cell(info, 0, 0, "Bedingung", text_color=color.white, text_size=size.small)
+    table.cell(info, 0, 0, "Setting", text_color=color.white, text_size=size.small)
     table.cell(info, 1, 0, "Status", text_color=color.white, text_size=size.small)
 
-    table.cell(info, 0, 1, "W: EMA10>20", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 1, w_ema10 > w_ema20 ? "+" : "-", text_color=w_ema10 > w_ema20 ? color.lime : color.red, text_size=size.tiny)
+    table.cell(info, 0, 1, "W: EMA Stack", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 1, cond_w_bull ? "BULL" : cond_w_bear ? "BEAR" : "-", text_color=cond_w_bull ? color.lime : cond_w_bear ? color.red : color.gray, text_size=size.tiny)
 
-    table.cell(info, 0, 2, "W: EMA20>50", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 2, w_ema20 > w_ema50 ? "+" : "-", text_color=w_ema20 > w_ema50 ? color.lime : color.red, text_size=size.tiny)
+    table.cell(info, 0, 2, "D: EMA10>20", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 2, d_ema10 > d_ema20 ? "+" : "-", text_color=d_ema10 > d_ema20 ? color.lime : color.red, text_size=size.tiny)
 
-    table.cell(info, 0, 3, "D: EMA10>20", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 3, d_ema10 > d_ema20 ? "+" : "-", text_color=d_ema10 > d_ema20 ? color.lime : color.red, text_size=size.tiny)
+    table.cell(info, 0, 3, "H2 Pullback", text_color=color.white, text_size=size.tiny)
+    pb_txt = h2_ema10 < h2_ema20 ? "LONG" : h2_ema10 > h2_ema20 ? "SHORT" : "-"
+    table.cell(info, 1, 3, pb_txt, text_color=color.white, text_size=size.tiny)
 
-    table.cell(info, 0, 4, "H2: Pullback", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 4, cond_h2_pullback_bull ? "LONG" : cond_h2_pullback_bear ? "SHORT" : "-", text_color=cond_h2_pullback_bull ? color.lime : cond_h2_pullback_bear ? color.red : color.gray, text_size=size.tiny)
+    table.cell(info, 0, 4, "Session", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 4, in_session ? "ON" : "OFF", text_color=in_session ? color.lime : color.gray, text_size=size.tiny)
 
-    table.cell(info, 0, 5, "Session", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 5, in_session ? "AKTIV" : "AUS", text_color=in_session ? color.lime : color.gray, text_size=size.tiny)
+    table.cell(info, 0, 5, "Trail Mode", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 5, trail_mode, text_color=color.aqua, text_size=size.tiny)
 
-    table.cell(info, 0, 6, "Richtung", text_color=color.white, text_size=size.tiny)
-    dir_text = strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT"
-    dir_col  = strategy.position_size > 0 ? color.lime : strategy.position_size < 0 ? color.red : color.gray
-    table.cell(info, 1, 6, dir_text, text_color=dir_col, text_size=size.tiny)
+    table.cell(info, 0, 6, "Risk/Trade", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 6, str.tostring(risk_pct, "#.#") + "%", text_color=color.yellow, text_size=size.tiny)
 
-    table.cell(info, 0, 7, "Trailing SL", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 7, strategy.position_size != 0 ? str.tostring(trailing_sl, format.mintick) : "-", text_color=color.orange, text_size=size.tiny)
+    table.cell(info, 0, 7, "Position", text_color=color.white, text_size=size.tiny)
+    pos_txt = strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT"
+    pos_col = strategy.position_size > 0 ? color.lime : strategy.position_size < 0 ? color.red : color.gray
+    table.cell(info, 1, 7, pos_txt, text_color=pos_col, text_size=size.tiny)
 
-    table.cell(info, 0, 8, "Breakeven", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 8, breakeven_active ? "AKTIV" : "INAKTIV", text_color=breakeven_active ? color.lime : color.gray, text_size=size.tiny)
+    table.cell(info, 0, 8, "Trail SL", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 8, strategy.position_size != 0 ? str.tostring(trail_sl, format.mintick) : "-", text_color=color.orange, text_size=size.tiny)
 
-    table.cell(info, 0, 9, "Partial TP", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 9, partial_closed ? "50% CLOSED" : "OFFEN", text_color=partial_closed ? color.lime : color.gray, text_size=size.tiny)
+    table.cell(info, 0, 9, "Breakeven", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 9, be_active ? "ON" : "OFF", text_color=be_active ? color.lime : color.gray, text_size=size.tiny)
 
-    table.cell(info, 0, 10, "HTF Trend", text_color=color.white, text_size=size.tiny)
-    trend_text = htf_bullish ? "BULL" : htf_bearish ? "BEAR" : "NEUTRAL"
-    trend_col  = htf_bullish ? color.lime : htf_bearish ? color.red : color.gray
-    table.cell(info, 1, 10, trend_text, text_color=trend_col, text_size=size.tiny)
+    table.cell(info, 0, 10, "Partial TP", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 10, partial_done ? str.tostring(partial_tp_pct, "#") + "% DONE" : "OPEN", text_color=partial_done ? color.lime : color.gray, text_size=size.tiny)
+
+    table.cell(info, 0, 11, "ATR", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 11, str.tostring(atr_val, format.mintick), text_color=color.aqua, text_size=size.tiny)
