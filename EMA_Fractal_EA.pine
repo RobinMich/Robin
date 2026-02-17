@@ -125,23 +125,12 @@ atr_val = ta.atr(atr_period)
 // ADX BERECHNUNG
 // ============================================================================
 
-// Wilder's DI+/DI-/ADX auf Chart-TF
-f_adx(int len) =>
-    up   = ta.change(high)
-    down = -ta.change(low)
-    plus_dm  = (up > down and up > 0) ? up : 0.0
-    minus_dm = (down > up and down > 0) ? down : 0.0
-    atr14    = ta.rma(ta.tr, len)
-    plus_di  = 100 * ta.rma(plus_dm, len) / atr14
-    minus_di = 100 * ta.rma(minus_dm, len) / atr14
-    dx       = math.abs(plus_di - minus_di) / (plus_di + minus_di) * 100
-    adx_out  = ta.rma(dx, len)
-    [adx_out, plus_di, minus_di]
+// DI+/DI-/ADX via ta.dmi() (Pine v6 built-in)
+[di_plus_chart, di_minus_chart, adx_chart] = ta.dmi(adx_len, adx_len)
 
-[adx_chart, di_plus_chart, di_minus_chart] = f_adx(adx_len)
-
-// Daily ADX via request.security
-adx_daily_raw = request.security(syminfo.tickerid, "D", ta.adx(adx_len), lookahead=barmerge.lookahead_off)
+// Daily ADX via request.security + ta.dmi()
+[_d_dip, _d_dim, adx_daily_raw] = request.security(syminfo.tickerid, "D",
+     ta.dmi(adx_len, adx_len), lookahead=barmerge.lookahead_off)
 
 // ADX Filter Bedingung
 adx_chart_ok = not use_adx_filter or adx_chart >= adx_threshold
