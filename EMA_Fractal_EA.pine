@@ -24,11 +24,11 @@ trade_short = input.bool(true, "Short Trades", group=grp_dir)
 
 grp_frac = "Fractal"
 fractal_lookback    = input.int(2, "Lookback", minval=1, maxval=5, group=grp_frac)
-max_candles_fractal = input.int(10, "Max Kerzen für Fractal", minval=1, maxval=50, group=grp_frac)
+max_candles_fractal = input.int(15, "Max Kerzen für Fractal", minval=1, maxval=50, group=grp_frac)
 
 grp_filter = "Abstandsfilter"
 use_distance_filter = input.bool(true, "Aktivieren", group=grp_filter)
-max_distance_pct    = input.float(0.5, "Max Abstand (%)", minval=0.01, maxval=5.0, step=0.05, group=grp_filter)
+max_distance_pct    = input.float(1.5, "Max Abstand (%)", minval=0.01, maxval=5.0, step=0.05, group=grp_filter)
 
 grp_adx = "ADX Filter (Range-Schutz)"
 use_adx_filter   = input.bool(true, "ADX Filter aktivieren", group=grp_adx,
@@ -204,7 +204,8 @@ var float entry_px      = na
 var float sl_px         = na
 var float last_fl       = na
 var float last_fh       = na
-var bool  order_pend    = false
+var bool  order_pend    = false // Berechnung + Platzierung nötig
+var bool  order_active  = false // Order platziert, wartet auf Fill
 var bool  be_active     = false
 var float trail_sl      = na
 var bool  partial_done  = false
@@ -215,13 +216,13 @@ if fh_det
     last_fh := fh_price
 
 // --- Setup ---
-if setup_long and not waiting and strategy.position_size == 0 and not order_pend
+if setup_long and not waiting and strategy.position_size == 0 and not order_pend and not order_active
     waiting    := true
     bars_setup := 0
     trade_dir  := 1
     f_log("INFO", "waiting=true (Long)")
 
-if setup_short and not waiting and strategy.position_size == 0 and not order_pend
+if setup_short and not waiting and strategy.position_size == 0 and not order_pend and not order_active
     waiting    := true
     bars_setup := 0
     trade_dir  := -1
@@ -280,18 +281,18 @@ if waiting and trade_dir == -1 and fl_det and bars_setup <= max_candles_fractal
             partial_done := false
             f_log("INFO", "PENDING Short: entry=" + str.tostring(entry_px, format.mintick) + " sl=" + str.tostring(sl_px, format.mintick))
 
-// --- Order ausführen ---
+// --- Order ausführen (einmalig) ---
 if order_pend and strategy.position_size == 0
     risk_amount = strategy.equity * risk_pct / 100
     sl_distance = math.abs(entry_px - sl_px)
     qty_risk    = sl_distance > 0 ? risk_amount / sl_distance : 0.0
 
-    // FIX 1: Stop-Preis validieren (Breakout-Stop muss über/unter Markt liegen)
+    // Stop-Preis validieren (Breakout-Stop muss über/unter Markt liegen)
     long_stop  = math.max(entry_px, high) + syminfo.mintick
     short_stop = math.min(entry_px, low)  - syminfo.mintick
     entry_for_cap = trade_dir == 1 ? long_stop : short_stop
 
-    // FIX 3: Qty nach Leverage/Margin begrenzen
+    // Qty nach Leverage/Margin begrenzen
     max_value = strategy.equity * leverage
     qty_cap   = (use_leverage_cap and entry_for_cap > 0) ? (max_value / entry_for_cap) : qty_risk
     qty       = use_leverage_cap ? math.min(qty_risk, qty_cap) : qty_risk
@@ -308,29 +309,34 @@ if order_pend and strategy.position_size == 0
     if trade_dir == 1 and qty > 0
         strategy.entry("Long", strategy.long, qty=qty, stop=long_stop)
         strategy.exit("SL Long", "Long", stop=sl_px)
-        trail_sl := sl_px
-        // FIX 2: order_pend sofort zurücksetzen (kein Re-Senden)
-        order_pend := false
+        // Order platziert → auf Fill warten (kein Re-Senden)
+        order_pend   := false
+        order_active := true
         f_log("INFO", "ENTRY Long: stop=" + str.tostring(long_stop, format.mintick) +
              " sl=" + str.tostring(sl_px, format.mintick) + " qty=" + str.tostring(qty, "#.####"))
     else if trade_dir == -1 and qty > 0
         strategy.entry("Short", strategy.short, qty=qty, stop=short_stop)
         strategy.exit("SL Short", "Short", stop=sl_px)
-        trail_sl := sl_px
-        // FIX 2: order_pend sofort zurücksetzen
-        order_pend := false
+        order_pend   := false
+        order_active := true
         f_log("INFO", "ENTRY Short: stop=" + str.tostring(short_stop, format.mintick) +
              " sl=" + str.tostring(sl_px, format.mintick) + " qty=" + str.tostring(qty, "#.####"))
 
-// --- Pending Order stornieren wenn HTF-Trend kippt ---
-if order_pend
+// --- Order gefüllt → trail_sl initialisieren ---
+if order_active and strategy.position_size != 0
+    order_active := false
+    trail_sl     := sl_px
+    f_log("INFO", "FILL: Position offen, trail_sl=" + str.tostring(sl_px, format.mintick))
+
+// --- Wartende Order stornieren wenn HTF-Trend kippt ---
+if order_active
     cancel_it = (trade_dir == 1 and not htf_bullish) or (trade_dir == -1 and not htf_bearish)
     if cancel_it
         strategy.cancel_all()
-        order_pend := false
-        entry_px   := na
-        sl_px      := na
-        trade_dir  := 0
+        order_active := false
+        entry_px     := na
+        sl_px        := na
+        trade_dir    := 0
         f_log("WARN", "CANCEL: HTF-Trend gedreht → Pending Order storniert")
 
 // ============================================================================
@@ -425,7 +431,7 @@ if strategy.position_size < 0 and trade_dir == -1 and use_breakeven and not be_a
 // RESET
 // ============================================================================
 
-if strategy.position_size == 0 and not order_pend
+if strategy.position_size == 0 and not order_pend and not order_active
     trade_dir    := 0
     be_active    := false
     partial_done := false
