@@ -1,11 +1,12 @@
 // This Pine Script™ source code is subject to the terms of the Mozilla Public License 2.0
 // https://mozilla.org/MPL/2.0/
-// © Robin - EMA Fractal Expert Advisor v3.0
-// Neu: 4 Trailing-Methoden, konfigurierbares Risiko, Partial-TP Modi, Range-Filter
+// © Robin - EMA Fractal Expert Advisor v4.0
+// v3 → v4: ADX-Filter, Leverage Cap, Stop-Validierung, order_pend Fix, Pine Logs
 
 //@version=6
-strategy("EMA Fractal EA v3", overlay=true, default_qty_type=strategy.percent_of_equity,
-         default_qty_value=1, initial_capital=10000,
+strategy("EMA Fractal EA v4", overlay=true,
+         default_qty_type=strategy.percent_of_equity, default_qty_value=1,
+         initial_capital=10000,
          commission_type=strategy.commission.percent, commission_value=0.01, slippage=1)
 
 // ============================================================================
@@ -29,27 +30,73 @@ grp_filter = "Abstandsfilter"
 use_distance_filter = input.bool(true, "Aktivieren", group=grp_filter)
 max_distance_pct    = input.float(0.5, "Max Abstand (%)", minval=0.01, maxval=5.0, step=0.05, group=grp_filter)
 
+grp_adx = "ADX Filter (Range-Schutz)"
+use_adx_filter   = input.bool(true, "ADX Filter aktivieren", group=grp_adx,
+                     tooltip="Blockiert Trades wenn ADX unter Schwelle → vermeidet Fehl-Trades in Seitwärtsphasen")
+adx_len          = input.int(14, "ADX Periode", minval=5, maxval=50, group=grp_adx)
+adx_threshold    = input.float(20.0, "ADX Schwelle", minval=10.0, maxval=50.0, step=1.0, group=grp_adx,
+                     tooltip="Trades nur wenn ADX > Schwelle (20 = Standard, höher = strengerer Filter)")
+adx_htf_mode     = input.string("Chart", "ADX Timeframe", options=["Chart", "Daily", "Beide"], group=grp_adx,
+                     tooltip="Chart = aktueller TF, Daily = Tages-ADX, Beide = beide müssen über Schwelle sein")
+
 grp_sl = "Stop Loss"
-sl_mode = input.string("Halber Abstand", "SL Modus", options=["Volles Fractal Low", "Halber Abstand"], group=grp_sl)
+sl_mode = input.string("Halber Abstand", "SL Modus",
+             options=["Volles Fractal Low", "Halber Abstand"], group=grp_sl)
 
 grp_risk = "Risiko Management"
 risk_pct = input.float(1.0, "Risiko pro Trade (%)", minval=0.1, maxval=5.0, step=0.1, group=grp_risk)
 
+grp_lev = "Leverage / Margin Cap"
+use_leverage_cap = input.bool(true, "Leverage Cap aktivieren", group=grp_lev,
+                     tooltip="Begrenzt Positionsgröße auf equity × leverage / entry_price")
+leverage         = input.float(1.0, "Leverage (1 = kein Hebel)", minval=1.0, maxval=100.0, step=0.5, group=grp_lev)
+
 grp_trail = "Trailing Stop"
-trail_mode     = input.string("ATR", "Trailing Methode", options=["Fractal", "ATR", "Chandelier", "EMA"], group=grp_trail)
+trail_mode     = input.string("ATR", "Trailing Methode",
+                     options=["Fractal", "ATR", "Chandelier", "EMA"], group=grp_trail)
 atr_period     = input.int(14, "ATR Periode", minval=1, group=grp_trail)
 atr_mult       = input.float(2.0, "ATR/Chandelier Multiplikator", minval=0.5, maxval=5.0, step=0.1, group=grp_trail)
 ema_trail_len  = input.int(10, "EMA Trail Periode", minval=1, group=grp_trail)
 
 grp_be = "Breakeven & Partial TP"
 use_breakeven  = input.bool(true, "Breakeven aktivieren", group=grp_be)
-partial_mode   = input.string("Breakeven", "Partial-TP Modus", options=["Breakeven", "Trail-Hit"], group=grp_be)
+partial_mode   = input.string("Breakeven", "Partial-TP Modus",
+                     options=["Breakeven", "Trail-Hit"], group=grp_be)
 partial_tp_pct = input.float(50.0, "Anteil schließen (%)", minval=10, maxval=90, step=5, group=grp_be)
 
 grp_time = "Zeitfilter"
 use_session = input.bool(true, "Zeitfilter aktivieren", group=grp_time)
 sess_start  = input.int(8, "Start (UTC)", minval=0, maxval=23, group=grp_time)
 sess_end    = input.int(20, "Ende (UTC)", minval=0, maxval=23, group=grp_time)
+
+// ============================================================================
+// PROTOKOLL (Pine Logs)
+// ============================================================================
+
+grp_log   = "Protokoll (Pine Logs)"
+log_on    = input.bool(true, "Logs aktivieren", group=grp_log)
+log_smoke = input.bool(false, "Smoke-Test: log auf letzter Kerze", group=grp_log)
+
+f_pfx() =>
+    syminfo.ticker + " " + timeframe.period + " bar#" + str.tostring(bar_index) + " | "
+
+f_log(string lvl, string msg) =>
+    if log_on
+        string line = f_pfx() + msg
+        if lvl == "ERROR"
+            log.error(line)
+        else if lvl == "WARN"
+            log.warning(line)
+        else
+            log.info(line)
+
+// Edge-Logging: nur beim ersten Auftreten einer Bedingung
+f_log_edge(string lvl, string msg, bool cond) =>
+    if log_on and cond and not cond[1]
+        f_log(lvl, msg)
+
+if log_on and log_smoke and barstate.islast
+    log.info("SMOKE: Script läuft → " + syminfo.ticker + " " + timeframe.period)
 
 // ============================================================================
 // BERECHNUNGEN
@@ -66,7 +113,7 @@ w_ema50 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_slow_len), l
 d_ema10 = request.security(syminfo.tickerid, "D", ta.ema(close, ema_fast_len), lookahead=barmerge.lookahead_off)
 d_ema20 = request.security(syminfo.tickerid, "D", ta.ema(close, ema_mid_len), lookahead=barmerge.lookahead_off)
 
-// H2 EMAs
+// Chart-TF EMAs
 h2_ema10 = ta.ema(close, ema_fast_len)
 h2_ema20 = ta.ema(close, ema_mid_len)
 h2_ema_trail = ta.ema(close, ema_trail_len)
@@ -74,7 +121,47 @@ h2_ema_trail = ta.ema(close, ema_trail_len)
 // ATR
 atr_val = ta.atr(atr_period)
 
-// Scanner
+// ============================================================================
+// ADX BERECHNUNG
+// ============================================================================
+
+// Wilder's DI+/DI-/ADX auf Chart-TF
+f_adx(int len) =>
+    up   = ta.change(high)
+    down = -ta.change(low)
+    plus_dm  = (up > down and up > 0) ? up : 0.0
+    minus_dm = (down > up and down > 0) ? down : 0.0
+    atr14    = ta.rma(ta.tr, len)
+    plus_di  = 100 * ta.rma(plus_dm, len) / atr14
+    minus_di = 100 * ta.rma(minus_dm, len) / atr14
+    dx       = math.abs(plus_di - minus_di) / (plus_di + minus_di) * 100
+    adx_out  = ta.rma(dx, len)
+    [adx_out, plus_di, minus_di]
+
+[adx_chart, di_plus_chart, di_minus_chart] = f_adx(adx_len)
+
+// Daily ADX via request.security
+adx_daily_raw = request.security(syminfo.tickerid, "D", ta.adx(adx_len), lookahead=barmerge.lookahead_off)
+
+// ADX Filter Bedingung
+adx_chart_ok = not use_adx_filter or adx_chart >= adx_threshold
+adx_daily_ok = not use_adx_filter or adx_daily_raw >= adx_threshold
+
+adx_pass = not use_adx_filter or
+             (adx_htf_mode == "Chart"  and adx_chart_ok) or
+             (adx_htf_mode == "Daily"  and adx_daily_ok) or
+             (adx_htf_mode == "Beide"  and adx_chart_ok and adx_daily_ok)
+
+f_log_edge("WARN", "ADX BLOCK: chart=" + str.tostring(adx_chart, "#.#") +
+             " daily=" + str.tostring(adx_daily_raw, "#.#") +
+             " threshold=" + str.tostring(adx_threshold, "#.#"), not adx_pass)
+f_log_edge("INFO", "ADX PASS: chart=" + str.tostring(adx_chart, "#.#") +
+             " daily=" + str.tostring(adx_daily_raw, "#.#"), adx_pass)
+
+// ============================================================================
+// TRENDFILTER & SETUP
+// ============================================================================
+
 cond_w_bull = w_ema10 > w_ema20 and w_ema20 > w_ema50
 cond_d_bull = d_ema10 > d_ema20
 htf_bullish = cond_w_bull and cond_d_bull
@@ -87,8 +174,12 @@ htf_bearish = cond_w_bear and cond_d_bear
 cross_above = close > h2_ema20 and close[1] <= h2_ema20[1]
 cross_below = close < h2_ema20 and close[1] >= h2_ema20[1]
 
-setup_long  = trade_long  and htf_bullish and h2_ema10 < h2_ema20 and cross_above and in_session
-setup_short = trade_short and htf_bearish and h2_ema10 > h2_ema20 and cross_below and in_session
+// Setup: ADX-Filter als zusätzliche Bedingung
+setup_long  = trade_long  and htf_bullish and h2_ema10 < h2_ema20 and cross_above and in_session and adx_pass
+setup_short = trade_short and htf_bearish and h2_ema10 > h2_ema20 and cross_below and in_session and adx_pass
+
+f_log_edge("INFO", "SETUP LONG (htf_bullish + pullback + cross + session + ADX)", setup_long)
+f_log_edge("INFO", "SETUP SHORT (htf_bearish + pullback + cross + session + ADX)", setup_short)
 
 // ============================================================================
 // FRACTALS
@@ -136,71 +227,113 @@ if fh_det
 
 // --- Setup ---
 if setup_long and not waiting and strategy.position_size == 0 and not order_pend
-    waiting   := true
+    waiting    := true
     bars_setup := 0
-    trade_dir := 1
+    trade_dir  := 1
+    f_log("INFO", "waiting=true (Long)")
 
 if setup_short and not waiting and strategy.position_size == 0 and not order_pend
-    waiting   := true
+    waiting    := true
     bars_setup := 0
-    trade_dir := -1
+    trade_dir  := -1
+    f_log("INFO", "waiting=true (Short)")
 
 if waiting
     bars_setup += 1
 if waiting and bars_setup > max_candles_fractal
-    waiting   := false
+    f_log("WARN", "Timeout: kein Fractal innerhalb " + str.tostring(max_candles_fractal) + " Kerzen")
+    waiting    := false
     bars_setup := na
-    trade_dir := 0
+    trade_dir  := 0
 
-// --- Fractal → Order ---
+// --- Fractal → Pending Order ---
 if waiting and trade_dir == 1 and fh_det and bars_setup <= max_candles_fractal
     dp = math.abs(fh_price - h2_ema20) / h2_ema20 * 100
+    if use_distance_filter and dp > max_distance_pct
+        f_log("WARN", "BLOCK Long: Distance " + str.tostring(dp, "#.##") + "% > " + str.tostring(max_distance_pct, "#.##") + "%")
     if not use_distance_filter or dp <= max_distance_pct
         entry_px := fh_price
         if sl_mode == "Volles Fractal Low"
             sl_px := last_fl
         else
             sl_px := entry_px - (entry_px - last_fl) / 2
+        if na(last_fl)
+            f_log("ERROR", "BLOCK Long: last_fl = na")
+        if not na(sl_px) and sl_px >= entry_px
+            f_log("ERROR", "BLOCK Long: SL >= Entry (" + str.tostring(sl_px, format.mintick) + " >= " + str.tostring(entry_px, format.mintick) + ")")
         if not na(sl_px) and sl_px < entry_px
             order_pend   := true
             waiting      := false
             bars_setup   := na
             be_active    := false
             partial_done := false
+            f_log("INFO", "PENDING Long: entry=" + str.tostring(entry_px, format.mintick) + " sl=" + str.tostring(sl_px, format.mintick))
 
 if waiting and trade_dir == -1 and fl_det and bars_setup <= max_candles_fractal
     dp = math.abs(fl_price - h2_ema20) / h2_ema20 * 100
+    if use_distance_filter and dp > max_distance_pct
+        f_log("WARN", "BLOCK Short: Distance " + str.tostring(dp, "#.##") + "% > " + str.tostring(max_distance_pct, "#.##") + "%")
     if not use_distance_filter or dp <= max_distance_pct
         entry_px := fl_price
         if sl_mode == "Volles Fractal Low"
             sl_px := last_fh
         else
             sl_px := entry_px + (last_fh - entry_px) / 2
+        if na(last_fh)
+            f_log("ERROR", "BLOCK Short: last_fh = na")
+        if not na(sl_px) and sl_px <= entry_px
+            f_log("ERROR", "BLOCK Short: SL <= Entry (" + str.tostring(sl_px, format.mintick) + " <= " + str.tostring(entry_px, format.mintick) + ")")
         if not na(sl_px) and sl_px > entry_px
             order_pend   := true
             waiting      := false
             bars_setup   := na
             be_active    := false
             partial_done := false
+            f_log("INFO", "PENDING Short: entry=" + str.tostring(entry_px, format.mintick) + " sl=" + str.tostring(sl_px, format.mintick))
 
 // --- Order ausführen ---
 if order_pend and strategy.position_size == 0
-    // Positionsgröße basierend auf Risiko %
     risk_amount = strategy.equity * risk_pct / 100
     sl_distance = math.abs(entry_px - sl_px)
-    qty = sl_distance > 0 ? risk_amount / sl_distance : 0
+    qty_risk    = sl_distance > 0 ? risk_amount / sl_distance : 0.0
+
+    // FIX 1: Stop-Preis validieren (Breakout-Stop muss über/unter Markt liegen)
+    long_stop  = math.max(entry_px, high) + syminfo.mintick
+    short_stop = math.min(entry_px, low)  - syminfo.mintick
+    entry_for_cap = trade_dir == 1 ? long_stop : short_stop
+
+    // FIX 3: Qty nach Leverage/Margin begrenzen
+    max_value = strategy.equity * leverage
+    qty_cap   = (use_leverage_cap and entry_for_cap > 0) ? (max_value / entry_for_cap) : qty_risk
+    qty       = use_leverage_cap ? math.min(qty_risk, qty_cap) : qty_risk
+
+    if qty <= 0 or na(qty)
+        f_log("ERROR", "BLOCK Order: qty=" + (na(qty) ? "na" : str.tostring(qty, "#.####")) +
+             " (risk=" + str.tostring(qty_risk, "#.####") + " cap=" + str.tostring(qty_cap, "#.####") + ")")
+
+    if use_leverage_cap and qty_risk > qty
+        f_log("WARN", "QTY CAPPED: " + str.tostring(qty_risk, "#.####") +
+             " → " + str.tostring(qty, "#.####") +
+             " (equity=" + str.tostring(strategy.equity, "#.##") + " lev=" + str.tostring(leverage, "#.#") + ")")
 
     if trade_dir == 1 and qty > 0
-        strategy.entry("Long", strategy.long, qty=qty, stop=entry_px)
+        strategy.entry("Long", strategy.long, qty=qty, stop=long_stop)
         strategy.exit("SL Long", "Long", stop=sl_px)
+        trail_sl := sl_px
+        // FIX 2: order_pend sofort zurücksetzen (kein Re-Senden)
+        order_pend := false
+        f_log("INFO", "ENTRY Long: stop=" + str.tostring(long_stop, format.mintick) +
+             " sl=" + str.tostring(sl_px, format.mintick) + " qty=" + str.tostring(qty, "#.####"))
     else if trade_dir == -1 and qty > 0
-        strategy.entry("Short", strategy.short, qty=qty, stop=entry_px)
+        strategy.entry("Short", strategy.short, qty=qty, stop=short_stop)
         strategy.exit("SL Short", "Short", stop=sl_px)
+        trail_sl := sl_px
+        // FIX 2: order_pend sofort zurücksetzen
+        order_pend := false
+        f_log("INFO", "ENTRY Short: stop=" + str.tostring(short_stop, format.mintick) +
+             " sl=" + str.tostring(sl_px, format.mintick) + " qty=" + str.tostring(qty, "#.####"))
 
-if order_pend and strategy.position_size != 0
-    order_pend := false
-    trail_sl   := sl_px
-
+// --- Pending Order stornieren wenn HTF-Trend kippt ---
 if order_pend
     cancel_it = (trade_dir == 1 and not htf_bullish) or (trade_dir == -1 and not htf_bearish)
     if cancel_it
@@ -209,6 +342,7 @@ if order_pend
         entry_px   := na
         sl_px      := na
         trade_dir  := 0
+        f_log("WARN", "CANCEL: HTF-Trend gedreht → Pending Order storniert")
 
 // ============================================================================
 // TRAILING SL (4 Methoden)
@@ -232,7 +366,6 @@ if strategy.position_size > 0 and trade_dir == 1
         if h2_ema_trail > trail_sl
             trail_sl := h2_ema_trail
 
-    // SL Exit aktualisieren
     if partial_done
         strategy.exit("Trail Rest Long", "Long", stop=trail_sl)
     else
@@ -277,8 +410,10 @@ if strategy.position_size > 0 and trade_dir == 1 and use_breakeven and not be_ac
             if close_qty > 0
                 strategy.close("Long", qty=close_qty, comment="Partial TP")
                 partial_done := true
+                f_log("INFO", "PARTIAL Long: " + str.tostring(partial_tp_pct, "#") + "%")
 
         strategy.exit("BE Long", "Long", stop=trail_sl)
+        f_log("INFO", "BREAKEVEN Long: sl=" + str.tostring(trail_sl, format.mintick))
 
 // --- SHORT ---
 if strategy.position_size < 0 and trade_dir == -1 and use_breakeven and not be_active
@@ -292,8 +427,10 @@ if strategy.position_size < 0 and trade_dir == -1 and use_breakeven and not be_a
             if close_qty > 0
                 strategy.close("Short", qty=close_qty, comment="Partial TP")
                 partial_done := true
+                f_log("INFO", "PARTIAL Short: " + str.tostring(partial_tp_pct, "#") + "%")
 
         strategy.exit("BE Short", "Short", stop=trail_sl)
+        f_log("INFO", "BREAKEVEN Short: sl=" + str.tostring(trail_sl, format.mintick))
 
 // ============================================================================
 // RESET
@@ -323,52 +460,75 @@ plotshape(setup_short, "Short", shape.diamond, location.abovebar, color.fuchsia,
 
 bgcolor(htf_bullish ? color.new(color.green, 93) : htf_bearish ? color.new(color.red, 93) : na)
 bgcolor(not in_session and use_session ? color.new(color.gray, 95) : na)
+// ADX-Range Zone: leicht orange wenn ADX-Filter blockiert
+bgcolor(use_adx_filter and not adx_pass ? color.new(color.orange, 93) : na)
 
 plot(strategy.position_size != 0 ? trail_sl : na, "Trail SL", color.red, 2, plot.style_stepline)
 plot(order_pend ? entry_px : na, "Pending", color.new(color.yellow, 0), 1, plot.style_cross)
+
+// ADX als separates Overlay-Panel wäre ideal, aber in overlay=true nicht möglich
+// → ADX-Wert in der Info-Tabelle anzeigen
 
 // ============================================================================
 // INFO-TABELLE
 // ============================================================================
 
-var table info = table.new(position.top_right, 2, 12, bgcolor=color.new(color.black, 80), frame_width=1, frame_color=color.gray)
+var table info = table.new(position.top_right, 2, 14, bgcolor=color.new(color.black, 80), frame_width=1, frame_color=color.gray)
 
 if barstate.islast
     table.cell(info, 0, 0, "Setting", text_color=color.white, text_size=size.small)
     table.cell(info, 1, 0, "Status", text_color=color.white, text_size=size.small)
 
     table.cell(info, 0, 1, "W: EMA Stack", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 1, cond_w_bull ? "BULL" : cond_w_bear ? "BEAR" : "-", text_color=cond_w_bull ? color.lime : cond_w_bear ? color.red : color.gray, text_size=size.tiny)
+    table.cell(info, 1, 1, cond_w_bull ? "BULL" : cond_w_bear ? "BEAR" : "-",
+         text_color=cond_w_bull ? color.lime : cond_w_bear ? color.red : color.gray, text_size=size.tiny)
 
     table.cell(info, 0, 2, "D: EMA10>20", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 2, d_ema10 > d_ema20 ? "+" : "-", text_color=d_ema10 > d_ema20 ? color.lime : color.red, text_size=size.tiny)
+    table.cell(info, 1, 2, d_ema10 > d_ema20 ? "+" : "-",
+         text_color=d_ema10 > d_ema20 ? color.lime : color.red, text_size=size.tiny)
 
     table.cell(info, 0, 3, "H2 Pullback", text_color=color.white, text_size=size.tiny)
     pb_txt = h2_ema10 < h2_ema20 ? "LONG" : h2_ema10 > h2_ema20 ? "SHORT" : "-"
     table.cell(info, 1, 3, pb_txt, text_color=color.white, text_size=size.tiny)
 
     table.cell(info, 0, 4, "Session", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 4, in_session ? "ON" : "OFF", text_color=in_session ? color.lime : color.gray, text_size=size.tiny)
+    table.cell(info, 1, 4, in_session ? "ON" : "OFF",
+         text_color=in_session ? color.lime : color.gray, text_size=size.tiny)
 
-    table.cell(info, 0, 5, "Trail Mode", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 5, trail_mode, text_color=color.aqua, text_size=size.tiny)
+    // ADX-Zeilen
+    table.cell(info, 0, 5, "ADX (Chart)", text_color=color.white, text_size=size.tiny)
+    adx_c_col = (not use_adx_filter or adx_chart >= adx_threshold) ? color.lime : color.red
+    table.cell(info, 1, 5, str.tostring(adx_chart, "#.#") + (use_adx_filter ? " / " + str.tostring(adx_threshold, "#") : ""),
+         text_color=adx_c_col, text_size=size.tiny)
 
-    table.cell(info, 0, 6, "Risk/Trade", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 6, str.tostring(risk_pct, "#.#") + "%", text_color=color.yellow, text_size=size.tiny)
+    table.cell(info, 0, 6, "ADX (Daily)", text_color=color.white, text_size=size.tiny)
+    adx_d_col = (not use_adx_filter or adx_daily_raw >= adx_threshold) ? color.lime : color.red
+    table.cell(info, 1, 6, str.tostring(adx_daily_raw, "#.#") + (use_adx_filter ? " / " + str.tostring(adx_threshold, "#") : ""),
+         text_color=adx_d_col, text_size=size.tiny)
 
-    table.cell(info, 0, 7, "Position", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 0, 7, "Trail Mode", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 7, trail_mode, text_color=color.aqua, text_size=size.tiny)
+
+    table.cell(info, 0, 8, "Risk/Trade", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 8, str.tostring(risk_pct, "#.#") + "%", text_color=color.yellow, text_size=size.tiny)
+
+    table.cell(info, 0, 9, "Leverage", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 9, use_leverage_cap ? str.tostring(leverage, "#.#") + "x" : "OFF",
+         text_color=use_leverage_cap ? color.yellow : color.gray, text_size=size.tiny)
+
+    table.cell(info, 0, 10, "Position", text_color=color.white, text_size=size.tiny)
     pos_txt = strategy.position_size > 0 ? "LONG" : strategy.position_size < 0 ? "SHORT" : "FLAT"
     pos_col = strategy.position_size > 0 ? color.lime : strategy.position_size < 0 ? color.red : color.gray
-    table.cell(info, 1, 7, pos_txt, text_color=pos_col, text_size=size.tiny)
+    table.cell(info, 1, 10, pos_txt, text_color=pos_col, text_size=size.tiny)
 
-    table.cell(info, 0, 8, "Trail SL", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 8, strategy.position_size != 0 ? str.tostring(trail_sl, format.mintick) : "-", text_color=color.orange, text_size=size.tiny)
+    table.cell(info, 0, 11, "Trail SL", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 11, strategy.position_size != 0 ? str.tostring(trail_sl, format.mintick) : "-",
+         text_color=color.orange, text_size=size.tiny)
 
-    table.cell(info, 0, 9, "Breakeven", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 9, be_active ? "ON" : "OFF", text_color=be_active ? color.lime : color.gray, text_size=size.tiny)
+    table.cell(info, 0, 12, "Breakeven", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 12, be_active ? "ON" : "OFF",
+         text_color=be_active ? color.lime : color.gray, text_size=size.tiny)
 
-    table.cell(info, 0, 10, "Partial TP", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 10, partial_done ? str.tostring(partial_tp_pct, "#") + "% DONE" : "OPEN", text_color=partial_done ? color.lime : color.gray, text_size=size.tiny)
-
-    table.cell(info, 0, 11, "ATR", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 11, str.tostring(atr_val, format.mintick), text_color=color.aqua, text_size=size.tiny)
+    table.cell(info, 0, 13, "Partial TP", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 13, partial_done ? str.tostring(partial_tp_pct, "#") + "% DONE" : "OPEN",
+         text_color=partial_done ? color.lime : color.gray, text_size=size.tiny)
