@@ -91,11 +91,10 @@ log_on    = input.bool(true, "Logs aktivieren", group=grp_log)
 log_smoke = input.bool(false, "Smoke-Test: log auf letzter Kerze", group=grp_log)
 
 // ============================================================================
-// PORTFOLIO SCHUTZ: Tages-Verlustlimit
+// PORTFOLIO SCHUTZ: Tages-Verlustlimit (muss im globalen Scope stehen)
 // ============================================================================
 
-if use_daily_cap
-    strategy.risk.max_intraday_loss(daily_loss_pct, strategy.percent_of_equity)
+strategy.risk.max_intraday_loss(use_daily_cap ? daily_loss_pct : 100.0, strategy.percent_of_equity)
 
 // ============================================================================
 // PROTOKOLL (Pine Logs)
