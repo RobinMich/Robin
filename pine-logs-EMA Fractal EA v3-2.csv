@@ -1,0 +1,645 @@
+Datum,Nachricht
+2016-01-26T15:30:00.000+01:00,✦ SHORT SETUP aktiviert – warte auf Fractal Low
+2016-01-26T19:30:00.000+01:00,──── SHORT: Fractal Low gefunden ────
+2016-01-26T19:30:00.000+01:00,FL Preis=2.04 | H2_EMA20=2.06 | Abstand=1.43%
+2016-01-26T19:30:00.000+01:00,Entry=2.04 | SL=2.09 (mode=Halber Abstand) | last_fh=2.15
+2016-01-26T19:30:00.000+01:00,→ SHORT ORDER PENDING gesetzt: Entry=2.04 SL=2.09
+2016-01-26T19:30:00.000+01:00,──── Order Berechnung ────
+2016-01-26T19:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-26T19:30:00.000+01:00,Entry=2.04 | SL=2.09 | SL-Dist=0.06 | Loss/Kontrakt=0.0575 | Qty=1739.13043478
+2016-01-26T19:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1739.13043478 Entry(Stop)=2.04 SL=2.09
+2016-01-26T21:30:00.000+01:00,──── Order Berechnung ────
+2016-01-26T21:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-26T21:30:00.000+01:00,Entry=2.04 | SL=2.09 | SL-Dist=0.06 | Loss/Kontrakt=0.0575 | Qty=1739.13043478
+2016-01-26T21:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1739.13043478 Entry(Stop)=2.04 SL=2.09
+2016-01-27T15:30:00.000+01:00,──── Order Berechnung ────
+2016-01-27T15:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-27T15:30:00.000+01:00,Entry=2.04 | SL=2.09 | SL-Dist=0.06 | Loss/Kontrakt=0.0575 | Qty=1739.13043478
+2016-01-27T15:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1739.13043478 Entry(Stop)=2.04 SL=2.09
+2016-01-27T17:30:00.000+01:00,──── Order Berechnung ────
+2016-01-27T17:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-27T17:30:00.000+01:00,Entry=2.04 | SL=2.09 | SL-Dist=0.06 | Loss/Kontrakt=0.0575 | Qty=1739.13043478
+2016-01-27T17:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1739.13043478 Entry(Stop)=2.04 SL=2.09
+2016-01-27T17:30:00.000+01:00,⊘ ORDER STORNIERT: Entry zu weit weg! Entry=2.04 Close=2.15 Abstand=5.57% (Max=5%)
+2016-01-28T17:30:00.000+01:00,✦ SHORT SETUP aktiviert – warte auf Fractal Low
+2016-01-28T19:30:00.000+01:00,──── SHORT: Fractal Low gefunden ────
+2016-01-28T19:30:00.000+01:00,FL Preis=2.07 | H2_EMA20=2.09 | Abstand=1.11%
+2016-01-28T19:30:00.000+01:00,Entry=2.07 | SL=2.13 (mode=Halber Abstand) | last_fh=2.18
+2016-01-28T19:30:00.000+01:00,→ SHORT ORDER PENDING gesetzt: Entry=2.07 SL=2.13
+2016-01-28T19:30:00.000+01:00,──── Order Berechnung ────
+2016-01-28T19:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-28T19:30:00.000+01:00,Entry=2.07 | SL=2.13 | SL-Dist=0.06 | Loss/Kontrakt=0.055 | Qty=1818.18181818
+2016-01-28T19:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1818.18181818 Entry(Stop)=2.07 SL=2.13
+2016-01-28T21:30:00.000+01:00,──── Order Berechnung ────
+2016-01-28T21:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-28T21:30:00.000+01:00,Entry=2.07 | SL=2.13 | SL-Dist=0.06 | Loss/Kontrakt=0.055 | Qty=1818.18181818
+2016-01-28T21:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1818.18181818 Entry(Stop)=2.07 SL=2.13
+2016-01-29T15:30:00.000+01:00,──── Order Berechnung ────
+2016-01-29T15:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-29T15:30:00.000+01:00,Entry=2.07 | SL=2.13 | SL-Dist=0.06 | Loss/Kontrakt=0.055 | Qty=1818.18181818
+2016-01-29T15:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1818.18181818 Entry(Stop)=2.07 SL=2.13
+2016-01-29T17:30:00.000+01:00,──── Order Berechnung ────
+2016-01-29T17:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-29T17:30:00.000+01:00,Entry=2.07 | SL=2.13 | SL-Dist=0.06 | Loss/Kontrakt=0.055 | Qty=1818.18181818
+2016-01-29T17:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1818.18181818 Entry(Stop)=2.07 SL=2.13
+2016-01-29T19:30:00.000+01:00,──── Order Berechnung ────
+2016-01-29T19:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-29T19:30:00.000+01:00,Entry=2.07 | SL=2.13 | SL-Dist=0.06 | Loss/Kontrakt=0.055 | Qty=1818.18181818
+2016-01-29T19:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1818.18181818 Entry(Stop)=2.07 SL=2.13
+2016-01-29T21:30:00.000+01:00,──── Order Berechnung ────
+2016-01-29T21:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-01-29T21:30:00.000+01:00,Entry=2.07 | SL=2.13 | SL-Dist=0.06 | Loss/Kontrakt=0.055 | Qty=1818.18181818
+2016-01-29T21:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1818.18181818 Entry(Stop)=2.07 SL=2.13
+2016-01-29T21:30:00.000+01:00,⊘ ORDER STORNIERT: Entry zu weit weg! Entry=2.07 Close=2.19 Abstand=5.69% (Max=5%)
+2016-02-02T15:30:00.000+01:00,✦ SHORT SETUP aktiviert – warte auf Fractal Low
+2016-02-03T19:30:00.000+01:00,──── SHORT: Fractal Low gefunden ────
+2016-02-03T19:30:00.000+01:00,FL Preis=1.96 | H2_EMA20=2.08 | Abstand=6.03%
+2016-02-03T19:30:00.000+01:00,✘ SHORT: Abstandsfilter blockiert! Abstand=6.03% > Max=2%
+2016-02-04T19:30:00.000+01:00,──── SHORT: Fractal Low gefunden ────
+2016-02-04T19:30:00.000+01:00,FL Preis=2.03 | H2_EMA20=2.09 | Abstand=2.69%
+2016-02-04T19:30:00.000+01:00,✘ SHORT: Abstandsfilter blockiert! Abstand=2.69% > Max=2%
+2016-02-09T15:30:00.000+01:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-02-19T17:30:00.000+01:00,✦ SHORT SETUP aktiviert – warte auf Fractal Low
+2016-02-19T19:30:00.000+01:00,──── SHORT: Fractal Low gefunden ────
+2016-02-19T19:30:00.000+01:00,FL Preis=1.84 | H2_EMA20=1.90 | Abstand=2.91%
+2016-02-19T19:30:00.000+01:00,✘ SHORT: Abstandsfilter blockiert! Abstand=2.91% > Max=2%
+2016-02-24T19:30:00.000+01:00,──── SHORT: Fractal Low gefunden ────
+2016-02-24T19:30:00.000+01:00,FL Preis=1.93 | H2_EMA20=1.97 | Abstand=1.9%
+2016-02-24T19:30:00.000+01:00,Entry=1.93 | SL=1.99 (mode=Halber Abstand) | last_fh=2.06
+2016-02-24T19:30:00.000+01:00,→ SHORT ORDER PENDING gesetzt: Entry=1.93 SL=1.99
+2016-02-24T19:30:00.000+01:00,──── Order Berechnung ────
+2016-02-24T19:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-02-24T19:30:00.000+01:00,Entry=1.93 | SL=1.99 | SL-Dist=0.06 | Loss/Kontrakt=0.0625 | Qty=1600
+2016-02-24T19:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1600 Entry(Stop)=1.93 SL=1.99
+2016-02-24T21:30:00.000+01:00,──── Order Berechnung ────
+2016-02-24T21:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-02-24T21:30:00.000+01:00,Entry=1.93 | SL=1.99 | SL-Dist=0.06 | Loss/Kontrakt=0.0625 | Qty=1600
+2016-02-24T21:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1600 Entry(Stop)=1.93 SL=1.99
+2016-02-25T15:30:00.000+01:00,──── Order Berechnung ────
+2016-02-25T15:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-02-25T15:30:00.000+01:00,Entry=1.93 | SL=1.99 | SL-Dist=0.06 | Loss/Kontrakt=0.0625 | Qty=1600
+2016-02-25T15:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1600 Entry(Stop)=1.93 SL=1.99
+2016-02-25T17:30:00.000+01:00,──── Order Berechnung ────
+2016-02-25T17:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-02-25T17:30:00.000+01:00,Entry=1.93 | SL=1.99 | SL-Dist=0.06 | Loss/Kontrakt=0.0625 | Qty=1600
+2016-02-25T17:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1600 Entry(Stop)=1.93 SL=1.99
+2016-02-25T19:30:00.000+01:00,──── Order Berechnung ────
+2016-02-25T19:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-02-25T19:30:00.000+01:00,Entry=1.93 | SL=1.99 | SL-Dist=0.06 | Loss/Kontrakt=0.0625 | Qty=1600
+2016-02-25T19:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1600 Entry(Stop)=1.93 SL=1.99
+2016-02-25T21:30:00.000+01:00,──── Order Berechnung ────
+2016-02-25T21:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-02-25T21:30:00.000+01:00,Entry=1.93 | SL=1.99 | SL-Dist=0.06 | Loss/Kontrakt=0.0625 | Qty=1600
+2016-02-25T21:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1600 Entry(Stop)=1.93 SL=1.99
+2016-02-26T15:30:00.000+01:00,──── Order Berechnung ────
+2016-02-26T15:30:00.000+01:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-02-26T15:30:00.000+01:00,Entry=1.93 | SL=1.99 | SL-Dist=0.06 | Loss/Kontrakt=0.0625 | Qty=1600
+2016-02-26T15:30:00.000+01:00,▶ SHORT STOP-ORDER platziert: Qty=1600 Entry(Stop)=1.93 SL=1.99
+2016-02-26T15:30:00.000+01:00,⊘ ORDER STORNIERT: Entry zu weit weg! Entry=1.93 Close=2.07 Abstand=6.54% (Max=5%)
+2016-04-11T15:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-04-11T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-04-11T19:30:00.000+02:00,FH Preis=2.82 | H2_EMA20=2.76 | Abstand=2.15%
+2016-04-11T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.15% > Max=2%
+2016-04-13T15:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-04-13T15:30:00.000+02:00,FH Preis=2.85 | H2_EMA20=2.78 | Abstand=2.59%
+2016-04-13T15:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.59% > Max=2%
+2016-04-18T15:30:00.000+02:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-05-10T19:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-05-10T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-05-10T19:30:00.000+02:00,FH Preis=3.68 | H2_EMA20=3.63 | Abstand=1.41%
+2016-05-10T19:30:00.000+02:00,Entry=3.68 | SL=3.62 (mode=Halber Abstand) | last_fl=3.56
+2016-05-10T19:30:00.000+02:00,→ LONG ORDER PENDING gesetzt: Entry=3.68 SL=3.62
+2016-05-10T19:30:00.000+02:00,──── Order Berechnung ────
+2016-05-10T19:30:00.000+02:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-05-10T19:30:00.000+02:00,Entry=3.68 | SL=3.62 | SL-Dist=0.06 | Loss/Kontrakt=0.06 | Qty=1666.66666667
+2016-05-10T19:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=1666.66666667 Entry(Stop)=3.68 SL=3.62
+2016-05-10T21:30:00.000+02:00,──── Order Berechnung ────
+2016-05-10T21:30:00.000+02:00,Equity=10000 | Risk%=1 | Risk$=100 | pointvalue=1 | mintick=0.01
+2016-05-10T21:30:00.000+02:00,Entry=3.68 | SL=3.62 | SL-Dist=0.06 | Loss/Kontrakt=0.06 | Qty=1666.66666667
+2016-05-10T21:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=1666.66666667 Entry(Stop)=3.68 SL=3.62
+2016-05-11T15:30:00.000+02:00,✓ POSITION ERÖFFNET: Richtung=LONG | Size=1666 | Trail SL wird gesetzt auf 3.62
+2016-05-12T15:30:00.000+02:00,"♻ RESET: Position geschlossen, alle Variablen zurückgesetzt"
+2016-05-13T15:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-05-13T21:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-05-13T21:30:00.000+02:00,FH Preis=3.73 | H2_EMA20=3.65 | Abstand=2.32%
+2016-05-13T21:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.32% > Max=2%
+2016-05-17T21:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-05-17T21:30:00.000+02:00,FH Preis=3.98 | H2_EMA20=3.75 | Abstand=6.13%
+2016-05-17T21:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=6.13% > Max=2%
+2016-05-19T15:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-05-19T15:30:00.000+02:00,FH Preis=3.97 | H2_EMA20=3.79 | Abstand=4.79%
+2016-05-19T15:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=4.79% > Max=2%
+2016-05-20T15:30:00.000+02:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-06-06T15:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-06-07T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-06-07T19:30:00.000+02:00,FH Preis=4.66 | H2_EMA20=4.37 | Abstand=6.56%
+2016-06-07T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=6.56% > Max=2%
+2016-06-08T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-06-08T19:30:00.000+02:00,FH Preis=4.56 | H2_EMA20=4.40 | Abstand=3.66%
+2016-06-08T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=3.66% > Max=2%
+2016-06-10T15:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-06-10T15:30:00.000+02:00,FH Preis=4.54 | H2_EMA20=4.43 | Abstand=2.29%
+2016-06-10T15:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.29% > Max=2%
+2016-06-13T15:30:00.000+02:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-06-13T21:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-06-14T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-06-14T19:30:00.000+02:00,FH Preis=4.50 | H2_EMA20=4.40 | Abstand=2.19%
+2016-06-14T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.19% > Max=2%
+2016-06-20T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-06-20T19:30:00.000+02:00,FH Preis=5.45 | H2_EMA20=4.85 | Abstand=12.42%
+2016-06-20T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=12.42% > Max=2%
+2016-06-20T21:30:00.000+02:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-06-28T15:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-06-28T21:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-06-28T21:30:00.000+02:00,FH Preis=5.19 | H2_EMA20=5.00 | Abstand=3.76%
+2016-06-28T21:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=3.76% > Max=2%
+2016-06-29T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-06-29T19:30:00.000+02:00,FH Preis=5.40 | H2_EMA20=5.04 | Abstand=7.14%
+2016-06-29T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=7.14% > Max=2%
+2016-07-06T15:30:00.000+02:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-07-06T21:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-07-06T21:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-07-06T21:30:00.000+02:00,FH Preis=5.11 | H2_EMA20=5.04 | Abstand=1.48%
+2016-07-06T21:30:00.000+02:00,Entry=5.11 | SL=5.01 (mode=Halber Abstand) | last_fl=4.91
+2016-07-06T21:30:00.000+02:00,→ LONG ORDER PENDING gesetzt: Entry=5.11 SL=5.01
+2016-07-06T21:30:00.000+02:00,──── Order Berechnung ────
+2016-07-06T21:30:00.000+02:00,Equity=9865.5 | Risk%=1 | Risk$=98.66 | pointvalue=1 | mintick=0.01
+2016-07-06T21:30:00.000+02:00,Entry=5.11 | SL=5.01 | SL-Dist=0.10 | Loss/Kontrakt=0.1025 | Qty=962.48817756
+2016-07-06T21:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=962.48817756 Entry(Stop)=5.11 SL=5.01
+2016-07-07T15:30:00.000+02:00,──── Order Berechnung ────
+2016-07-07T15:30:00.000+02:00,Equity=9865.5 | Risk%=1 | Risk$=98.66 | pointvalue=1 | mintick=0.01
+2016-07-07T15:30:00.000+02:00,Entry=5.11 | SL=5.01 | SL-Dist=0.10 | Loss/Kontrakt=0.1025 | Qty=962.48817756
+2016-07-07T15:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=962.48817756 Entry(Stop)=5.11 SL=5.01
+2016-07-07T17:30:00.000+02:00,──── Order Berechnung ────
+2016-07-07T17:30:00.000+02:00,Equity=9865.5 | Risk%=1 | Risk$=98.66 | pointvalue=1 | mintick=0.01
+2016-07-07T17:30:00.000+02:00,Entry=5.11 | SL=5.01 | SL-Dist=0.10 | Loss/Kontrakt=0.1025 | Qty=962.48817756
+2016-07-07T17:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=962.48817756 Entry(Stop)=5.11 SL=5.01
+2016-07-07T19:30:00.000+02:00,──── Order Berechnung ────
+2016-07-07T19:30:00.000+02:00,Equity=9865.5 | Risk%=1 | Risk$=98.66 | pointvalue=1 | mintick=0.01
+2016-07-07T19:30:00.000+02:00,Entry=5.11 | SL=5.01 | SL-Dist=0.10 | Loss/Kontrakt=0.1025 | Qty=962.48817756
+2016-07-07T19:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=962.48817756 Entry(Stop)=5.11 SL=5.01
+2016-07-07T21:30:00.000+02:00,──── Order Berechnung ────
+2016-07-07T21:30:00.000+02:00,Equity=9865.5 | Risk%=1 | Risk$=98.66 | pointvalue=1 | mintick=0.01
+2016-07-07T21:30:00.000+02:00,Entry=5.11 | SL=5.01 | SL-Dist=0.10 | Loss/Kontrakt=0.1025 | Qty=962.48817756
+2016-07-07T21:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=962.48817756 Entry(Stop)=5.11 SL=5.01
+2016-07-08T15:30:00.000+02:00,──── Order Berechnung ────
+2016-07-08T15:30:00.000+02:00,Equity=9865.5 | Risk%=1 | Risk$=98.66 | pointvalue=1 | mintick=0.01
+2016-07-08T15:30:00.000+02:00,Entry=5.11 | SL=5.01 | SL-Dist=0.10 | Loss/Kontrakt=0.1025 | Qty=962.48817756
+2016-07-08T15:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=962.48817756 Entry(Stop)=5.11 SL=5.01
+2016-07-08T17:30:00.000+02:00,✓ POSITION ERÖFFNET: Richtung=LONG | Size=962 | Trail SL wird gesetzt auf 5.01
+2016-07-11T15:30:00.000+02:00,✓ LONG BREAKEVEN aktiviert: Trail SL → 5.11
+2016-07-11T15:30:00.000+02:00,✓ PARTIAL TP LONG: 50% = 481 Einheiten geschlossen
+2016-07-11T21:30:00.000+02:00,"♻ RESET: Position geschlossen, alle Variablen zurückgesetzt"
+2016-08-04T15:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-08-04T21:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-08-04T21:30:00.000+02:00,FH Preis=6.61 | H2_EMA20=6.47 | Abstand=2.13%
+2016-08-04T21:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.13% > Max=2%
+2016-08-05T21:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-08-05T21:30:00.000+02:00,FH Preis=6.76 | H2_EMA20=6.53 | Abstand=3.52%
+2016-08-05T21:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=3.52% > Max=2%
+2016-08-08T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-08-08T19:30:00.000+02:00,FH Preis=6.85 | H2_EMA20=6.57 | Abstand=4.18%
+2016-08-08T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=4.18% > Max=2%
+2016-08-09T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-08-09T19:30:00.000+02:00,FH Preis=6.77 | H2_EMA20=6.59 | Abstand=2.67%
+2016-08-09T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.67% > Max=2%
+2016-08-11T15:30:00.000+02:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-08-11T21:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-08-12T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-08-12T19:30:00.000+02:00,FH Preis=6.79 | H2_EMA20=6.59 | Abstand=2.99%
+2016-08-12T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.99% > Max=2%
+2016-08-16T17:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-08-16T17:30:00.000+02:00,FH Preis=6.97 | H2_EMA20=6.71 | Abstand=3.76%
+2016-08-16T17:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=3.76% > Max=2%
+2016-08-18T21:30:00.000+02:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-09-02T15:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-09-02T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-09-02T19:30:00.000+02:00,FH Preis=7.64 | H2_EMA20=7.45 | Abstand=2.53%
+2016-09-02T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.53% > Max=2%
+2016-09-06T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-09-06T19:30:00.000+02:00,FH Preis=7.60 | H2_EMA20=7.41 | Abstand=2.51%
+2016-09-06T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=2.51% > Max=2%
+2016-09-07T17:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-09-07T17:30:00.000+02:00,FH Preis=7.35 | H2_EMA20=7.32 | Abstand=0.47%
+2016-09-07T17:30:00.000+02:00,Entry=7.35 | SL=7.30 (mode=Halber Abstand) | last_fl=7.26
+2016-09-07T17:30:00.000+02:00,→ LONG ORDER PENDING gesetzt: Entry=7.35 SL=7.30
+2016-09-07T17:30:00.000+02:00,──── Order Berechnung ────
+2016-09-07T17:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-09-07T17:30:00.000+02:00,Entry=7.35 | SL=7.30 | SL-Dist=0.05 | Loss/Kontrakt=0.0475 | Qty=2065.60295221
+2016-09-07T17:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=2065.60295221 Entry(Stop)=7.35 SL=7.30
+2016-09-07T19:30:00.000+02:00,──── Order Berechnung ────
+2016-09-07T19:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-09-07T19:30:00.000+02:00,Entry=7.35 | SL=7.30 | SL-Dist=0.05 | Loss/Kontrakt=0.0475 | Qty=2065.60295221
+2016-09-07T19:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=2065.60295221 Entry(Stop)=7.35 SL=7.30
+2016-09-07T21:30:00.000+02:00,──── Order Berechnung ────
+2016-09-07T21:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-09-07T21:30:00.000+02:00,Entry=7.35 | SL=7.30 | SL-Dist=0.05 | Loss/Kontrakt=0.0475 | Qty=2065.60295221
+2016-09-07T21:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=2065.60295221 Entry(Stop)=7.35 SL=7.30
+2016-09-08T15:30:00.000+02:00,──── Order Berechnung ────
+2016-09-08T15:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-09-08T15:30:00.000+02:00,Entry=7.35 | SL=7.30 | SL-Dist=0.05 | Loss/Kontrakt=0.0475 | Qty=2065.60295221
+2016-09-08T15:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=2065.60295221 Entry(Stop)=7.35 SL=7.30
+2016-09-08T15:30:00.000+02:00,⊘ ORDER STORNIERT: Entry zu weit weg! Entry=7.35 Close=6.38 Abstand=15.29% (Max=5%)
+2016-10-10T15:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-10-10T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-10-10T19:30:00.000+02:00,FH Preis=6.94 | H2_EMA20=6.81 | Abstand=1.78%
+2016-10-10T19:30:00.000+02:00,Entry=6.94 | SL=6.78 (mode=Halber Abstand) | last_fl=6.63
+2016-10-10T19:30:00.000+02:00,→ LONG ORDER PENDING gesetzt: Entry=6.94 SL=6.78
+2016-10-10T19:30:00.000+02:00,──── Order Berechnung ────
+2016-10-10T19:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-10-10T19:30:00.000+02:00,Entry=6.94 | SL=6.78 | SL-Dist=0.16 | Loss/Kontrakt=0.155 | Qty=633.00735632
+2016-10-10T19:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=633.00735632 Entry(Stop)=6.94 SL=6.78
+2016-10-10T21:30:00.000+02:00,──── Order Berechnung ────
+2016-10-10T21:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-10-10T21:30:00.000+02:00,Entry=6.94 | SL=6.78 | SL-Dist=0.16 | Loss/Kontrakt=0.155 | Qty=633.00735632
+2016-10-10T21:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=633.00735632 Entry(Stop)=6.94 SL=6.78
+2016-10-11T15:30:00.000+02:00,──── Order Berechnung ────
+2016-10-11T15:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-10-11T15:30:00.000+02:00,Entry=6.94 | SL=6.78 | SL-Dist=0.16 | Loss/Kontrakt=0.155 | Qty=633.00735632
+2016-10-11T15:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=633.00735632 Entry(Stop)=6.94 SL=6.78
+2016-10-11T17:30:00.000+02:00,──── Order Berechnung ────
+2016-10-11T17:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-10-11T17:30:00.000+02:00,Entry=6.94 | SL=6.78 | SL-Dist=0.16 | Loss/Kontrakt=0.155 | Qty=633.00735632
+2016-10-11T17:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=633.00735632 Entry(Stop)=6.94 SL=6.78
+2016-10-11T17:30:00.000+02:00,⊘ ORDER STORNIERT: Entry zu weit weg! Entry=6.94 Close=6.47 Abstand=7.27% (Max=5%)
+2016-10-12T17:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-10-13T15:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-10-13T15:30:00.000+02:00,FH Preis=6.77 | H2_EMA20=6.67 | Abstand=1.52%
+2016-10-13T15:30:00.000+02:00,Entry=6.77 | SL=6.57 (mode=Halber Abstand) | last_fl=6.38
+2016-10-13T15:30:00.000+02:00,→ LONG ORDER PENDING gesetzt: Entry=6.77 SL=6.57
+2016-10-13T15:30:00.000+02:00,──── Order Berechnung ────
+2016-10-13T15:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-10-13T15:30:00.000+02:00,Entry=6.77 | SL=6.57 | SL-Dist=0.20 | Loss/Kontrakt=0.195 | Qty=503.15969349
+2016-10-13T15:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=503.15969349 Entry(Stop)=6.77 SL=6.57
+2016-10-13T17:30:00.000+02:00,──── Order Berechnung ────
+2016-10-13T17:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-10-13T17:30:00.000+02:00,Entry=6.77 | SL=6.57 | SL-Dist=0.20 | Loss/Kontrakt=0.195 | Qty=503.15969349
+2016-10-13T17:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=503.15969349 Entry(Stop)=6.77 SL=6.57
+2016-10-13T19:30:00.000+02:00,──── Order Berechnung ────
+2016-10-13T19:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-10-13T19:30:00.000+02:00,Entry=6.77 | SL=6.57 | SL-Dist=0.20 | Loss/Kontrakt=0.195 | Qty=503.15969349
+2016-10-13T19:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=503.15969349 Entry(Stop)=6.77 SL=6.57
+2016-10-13T21:30:00.000+02:00,──── Order Berechnung ────
+2016-10-13T21:30:00.000+02:00,Equity=9811.61 | Risk%=1 | Risk$=98.12 | pointvalue=1 | mintick=0.01
+2016-10-13T21:30:00.000+02:00,Entry=6.77 | SL=6.57 | SL-Dist=0.20 | Loss/Kontrakt=0.195 | Qty=503.15969349
+2016-10-13T21:30:00.000+02:00,▶ LONG STOP-ORDER platziert: Qty=503.15969349 Entry(Stop)=6.77 SL=6.57
+2016-10-14T15:30:00.000+02:00,✓ POSITION ERÖFFNET: Richtung=LONG | Size=503 | Trail SL wird gesetzt auf 6.57
+2016-10-14T15:30:00.000+02:00,✓ LONG BREAKEVEN aktiviert: Trail SL → 6.77
+2016-10-14T15:30:00.000+02:00,✓ PARTIAL TP LONG: 50% = 251.5 Einheiten geschlossen
+2016-10-21T15:30:00.000+02:00,"♻ RESET: Position geschlossen, alle Variablen zurückgesetzt"
+2016-10-24T15:30:00.000+02:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-10-26T17:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-10-26T17:30:00.000+02:00,FH Preis=7.50 | H2_EMA20=7.06 | Abstand=6.18%
+2016-10-26T17:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=6.18% > Max=2%
+2016-10-27T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-10-27T19:30:00.000+02:00,FH Preis=7.46 | H2_EMA20=7.13 | Abstand=4.58%
+2016-10-27T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=4.58% > Max=2%
+2016-10-28T19:30:00.000+02:00,──── LONG: Fractal High gefunden ────
+2016-10-28T19:30:00.000+02:00,FH Preis=7.53 | H2_EMA20=7.19 | Abstand=4.68%
+2016-10-28T19:30:00.000+02:00,✘ LONG: Abstandsfilter blockiert! Abstand=4.68% > Max=2%
+2016-10-31T14:30:00.000+01:00,⏰ TIMEOUT: 21 Bars ohne Fractal (Max=20) → Setup verfallen
+2016-11-07T15:30:00.000+01:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-11-07T21:30:00.000+01:00,──── LONG: Fractal High gefunden ────
+2016-11-07T21:30:00.000+01:00,FH Preis=6.98 | H2_EMA20=6.87 | Abstand=1.63%
+2016-11-07T21:30:00.000+01:00,Entry=6.98 | SL=6.73 (mode=Halber Abstand) | last_fl=6.47
+2016-11-07T21:30:00.000+01:00,→ LONG ORDER PENDING gesetzt: Entry=6.98 SL=6.73
+2016-11-07T21:30:00.000+01:00,──── Order Berechnung ────
+2016-11-07T21:30:00.000+01:00,Equity=9695.05 | Risk%=1 | Risk$=96.95 | pointvalue=1 | mintick=0.01
+2016-11-07T21:30:00.000+01:00,Entry=6.98 | SL=6.73 | SL-Dist=0.26 | Loss/Kontrakt=0.255 | Qty=380.19805745
+2016-11-07T21:30:00.000+01:00,▶ LONG STOP-ORDER platziert: Qty=380.19805745 Entry(Stop)=6.98 SL=6.73
+2016-11-08T15:30:00.000+01:00,✓ POSITION ERÖFFNET: Richtung=LONG | Size=380 | Trail SL wird gesetzt auf 6.73
+2016-11-08T15:30:00.000+01:00,✓ LONG BREAKEVEN aktiviert: Trail SL → 6.98
+2016-11-08T15:30:00.000+01:00,✓ PARTIAL TP LONG: 50% = 190 Einheiten geschlossen
+2016-11-09T15:30:00.000+01:00,"♻ RESET: Position geschlossen, alle Variablen zurückgesetzt"
+2016-12-05T17:30:00.000+01:00,✦ LONG SETUP aktiviert – warte auf Fractal High
+2016-12-05T19:30:00.000+01:00,──── LONG: Fractal High gefunden ────
+2016-12-05T19:30:00.000+01:00,FH Preis=8.70 | H2_EMA20=8.63 | Abstand=0.82%
+2016-12-05T19:30:00.000+01:00,Entry=8.70 | SL=8.48 (mode=Halber Abstand) | last_fl=8.26
+2016-12-05T19:30:00.000+01:00,→ LONG ORDER PENDING gesetzt: Entry=8.70 SL=8.48
+2016-12-05T19:30:00.000+01:00,──── Order Berechnung ────
+2016-12-05T19:30:00.000+01:00,Equity=9641.32 | Risk%=1 | Risk$=96.41 | pointvalue=1 | mintick=0.01
+2016-12-05T19:30:00.000+01:00,Entry=8.70 | SL=8.48 | SL-Dist=0.22 | Loss/Kontrakt=0.22 | Qty=438.24202477
+2016-12-05T19:30:00.000+01:00,▶ LONG STOP-ORDER platziert: Qty=438.24202477 Entry(Stop)=8.70 SL=8.48
+2016-12-05T21:30:00.000+01:00,✓ POSITION ERÖFFNET: Richtung=LONG | Size=438 | Trail SL wird gesetzt auf 8.48
+2016-12-06T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 8.48 → 8.78 (Methode=ATR)
+2016-12-06T15:30:00.000+01:00,✓ LONG BREAKEVEN aktiviert: Trail SL → 8.78
+2016-12-06T15:30:00.000+01:00,✓ PARTIAL TP LONG: 50% = 219 Einheiten geschlossen
+2016-12-06T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 8.78 → 8.98 (Methode=ATR)
+2016-12-06T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 8.98 → 9.03 (Methode=ATR)
+2016-12-06T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 9.03 → 9.06 (Methode=ATR)
+2016-12-07T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 9.06 → 9.16 (Methode=ATR)
+2016-12-07T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 9.16 → 9.17 (Methode=ATR)
+2016-12-07T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 9.17 → 9.17 (Methode=ATR)
+2016-12-08T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 9.17 → 9.94 (Methode=ATR)
+2016-12-08T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 9.94 → 10.03 (Methode=ATR)
+2016-12-12T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.03 → 10.25 (Methode=ATR)
+2016-12-13T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.25 → 10.25 (Methode=ATR)
+2016-12-15T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.25 → 10.37 (Methode=ATR)
+2016-12-15T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.37 → 10.41 (Methode=ATR)
+2016-12-19T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.41 → 10.48 (Methode=ATR)
+2016-12-19T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.48 → 10.49 (Methode=ATR)
+2016-12-19T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.49 → 10.54 (Methode=ATR)
+2016-12-20T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.54 → 10.94 (Methode=ATR)
+2016-12-20T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 10.94 → 11.04 (Methode=ATR)
+2016-12-20T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.04 → 11.10 (Methode=ATR)
+2016-12-21T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.10 → 11.13 (Methode=ATR)
+2016-12-22T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.13 → 11.26 (Methode=ATR)
+2016-12-27T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.26 → 11.51 (Methode=ATR)
+2016-12-27T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.51 → 11.54 (Methode=ATR)
+2016-12-27T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.54 → 11.68 (Methode=ATR)
+2016-12-27T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.68 → 11.72 (Methode=ATR)
+2017-02-02T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.72 → 11.84 (Methode=ATR)
+2017-02-02T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.84 → 11.98 (Methode=ATR)
+2017-02-06T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 11.98 → 12.63 (Methode=ATR)
+2017-02-06T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 12.63 → 12.85 (Methode=ATR)
+2017-02-06T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 12.85 → 12.90 (Methode=ATR)
+2017-02-06T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 12.90 → 13.03 (Methode=ATR)
+2017-02-09T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 13.03 → 13.18 (Methode=ATR)
+2017-02-21T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 13.18 → 13.32 (Methode=ATR)
+2017-02-21T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 13.32 → 13.52 (Methode=ATR)
+2017-02-21T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 13.52 → 13.57 (Methode=ATR)
+2017-02-22T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 13.57 → 13.73 (Methode=ATR)
+2017-02-22T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 13.73 → 13.94 (Methode=ATR)
+2017-02-27T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 13.94 → 14.38 (Methode=ATR)
+2017-02-27T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 14.38 → 14.70 (Methode=ATR)
+2017-07-26T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 14.70 → 14.72 (Methode=ATR)
+2018-06-06T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 14.72 → 15.14 (Methode=ATR)
+2018-06-06T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 15.14 → 15.22 (Methode=ATR)
+2018-06-06T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 15.22 → 15.26 (Methode=ATR)
+2018-06-11T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 15.26 → 15.35 (Methode=ATR)
+2018-06-12T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 15.35 → 15.37 (Methode=ATR)
+2018-06-13T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 15.37 → 15.76 (Methode=ATR)
+2018-06-13T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 15.76 → 15.81 (Methode=ATR)
+2018-06-13T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 15.81 → 15.90 (Methode=ATR)
+2018-06-14T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 15.90 → 16.09 (Methode=ATR)
+2018-06-14T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.09 → 16.15 (Methode=ATR)
+2018-06-18T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.15 → 16.34 (Methode=ATR)
+2018-06-18T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.34 → 16.37 (Methode=ATR)
+2018-06-18T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.37 → 16.40 (Methode=ATR)
+2018-07-16T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.40 → 16.41 (Methode=ATR)
+2018-07-17T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.41 → 16.43 (Methode=ATR)
+2018-07-18T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.43 → 16.43 (Methode=ATR)
+2018-07-20T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.43 → 16.45 (Methode=ATR)
+2018-07-26T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 16.45 → 17.33 (Methode=ATR)
+2018-07-26T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 17.33 → 17.53 (Methode=ATR)
+2018-07-26T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 17.53 → 17.62 (Methode=ATR)
+2018-07-27T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 17.62 → 18.14 (Methode=ATR)
+2018-07-30T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.14 → 18.66 (Methode=ATR)
+2018-07-30T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.66 → 18.72 (Methode=ATR)
+2018-08-06T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.72 → 18.75 (Methode=ATR)
+2018-08-07T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.75 → 18.78 (Methode=ATR)
+2018-08-07T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.78 → 18.85 (Methode=ATR)
+2018-08-07T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.85 → 18.91 (Methode=ATR)
+2018-08-08T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.91 → 18.95 (Methode=ATR)
+2018-08-08T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.95 → 18.97 (Methode=ATR)
+2018-08-13T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.97 → 18.99 (Methode=ATR)
+2018-08-13T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 18.99 → 19.05 (Methode=ATR)
+2018-08-13T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.05 → 19.08 (Methode=ATR)
+2018-08-13T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.08 → 19.12 (Methode=ATR)
+2018-08-14T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.12 → 19.33 (Methode=ATR)
+2018-08-14T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.33 → 19.41 (Methode=ATR)
+2018-08-14T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.41 → 19.41 (Methode=ATR)
+2018-08-21T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.41 → 19.58 (Methode=ATR)
+2018-08-21T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.58 → 19.59 (Methode=ATR)
+2018-08-21T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.59 → 19.74 (Methode=ATR)
+2018-08-21T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.74 → 19.84 (Methode=ATR)
+2018-08-22T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 19.84 → 20.01 (Methode=ATR)
+2018-08-22T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 20.01 → 20.23 (Methode=ATR)
+2018-08-22T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 20.23 → 20.28 (Methode=ATR)
+2018-08-22T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 20.28 → 20.35 (Methode=ATR)
+2018-08-23T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 20.35 → 20.95 (Methode=ATR)
+2018-08-23T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 20.95 → 21.22 (Methode=ATR)
+2018-08-23T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 21.22 → 21.53 (Methode=ATR)
+2018-08-23T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 21.53 → 21.63 (Methode=ATR)
+2018-08-24T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 21.63 → 22.62 (Methode=ATR)
+2018-08-24T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 22.62 → 22.98 (Methode=ATR)
+2018-08-24T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 22.98 → 23.14 (Methode=ATR)
+2018-08-27T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 23.14 → 24.63 (Methode=ATR)
+2018-08-27T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 24.63 → 25.63 (Methode=ATR)
+2018-09-04T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 25.63 → 25.73 (Methode=ATR)
+2018-09-04T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 25.73 → 26.30 (Methode=ATR)
+2018-09-04T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 26.30 → 26.73 (Methode=ATR)
+2018-09-04T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 26.73 → 26.76 (Methode=ATR)
+2018-09-05T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 26.76 → 27.31 (Methode=ATR)
+2018-09-10T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 27.31 → 27.33 (Methode=ATR)
+2018-09-10T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 27.33 → 27.53 (Methode=ATR)
+2018-09-10T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 27.53 → 28.08 (Methode=ATR)
+2018-09-10T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 28.08 → 28.37 (Methode=ATR)
+2018-09-11T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 28.37 → 28.64 (Methode=ATR)
+2018-09-11T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 28.64 → 28.65 (Methode=ATR)
+2018-09-12T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 28.65 → 28.85 (Methode=ATR)
+2018-09-12T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 28.85 → 29.98 (Methode=ATR)
+2018-09-12T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 29.98 → 30.55 (Methode=ATR)
+2018-09-12T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 30.55 → 30.64 (Methode=ATR)
+2018-09-13T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 30.64 → 31.34 (Methode=ATR)
+2018-09-27T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 31.34 → 31.34 (Methode=ATR)
+2019-06-07T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 31.34 → 31.35 (Methode=ATR)
+2019-06-10T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 31.35 → 32.83 (Methode=ATR)
+2019-07-10T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 32.83 → 32.87 (Methode=ATR)
+2019-07-10T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 32.87 → 33.07 (Methode=ATR)
+2019-07-15T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 33.07 → 33.24 (Methode=ATR)
+2019-07-15T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 33.24 → 33.52 (Methode=ATR)
+2019-07-15T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 33.52 → 33.55 (Methode=ATR)
+2019-07-16T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 33.55 → 33.70 (Methode=ATR)
+2019-11-01T14:30:00.000+01:00,↑ LONG Trail SL angehoben: 33.70 → 33.80 (Methode=ATR)
+2019-11-01T18:30:00.000+01:00,↑ LONG Trail SL angehoben: 33.80 → 33.87 (Methode=ATR)
+2019-11-01T20:30:00.000+01:00,↑ LONG Trail SL angehoben: 33.87 → 33.95 (Methode=ATR)
+2019-11-04T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 33.95 → 34.75 (Methode=ATR)
+2019-11-04T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 34.75 → 34.93 (Methode=ATR)
+2019-11-04T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 34.93 → 35.33 (Methode=ATR)
+2019-11-05T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 35.33 → 35.71 (Methode=ATR)
+2019-11-05T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 35.71 → 36.01 (Methode=ATR)
+2019-11-12T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 36.01 → 36.08 (Methode=ATR)
+2019-11-12T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 36.08 → 36.10 (Methode=ATR)
+2019-11-13T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 36.10 → 36.78 (Methode=ATR)
+2019-11-14T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 36.78 → 36.99 (Methode=ATR)
+2019-11-14T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 36.99 → 37.39 (Methode=ATR)
+2019-11-14T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 37.39 → 37.42 (Methode=ATR)
+2019-11-15T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 37.42 → 37.72 (Methode=ATR)
+2019-11-18T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 37.72 → 38.57 (Methode=ATR)
+2019-11-18T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 38.57 → 38.60 (Methode=ATR)
+2019-11-18T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 38.60 → 38.73 (Methode=ATR)
+2019-11-18T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 38.73 → 38.92 (Methode=ATR)
+2019-11-19T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 38.92 → 39.26 (Methode=ATR)
+2019-11-19T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 39.26 → 40.03 (Methode=ATR)
+2019-11-19T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 40.03 → 40.42 (Methode=ATR)
+2019-12-12T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 40.42 → 40.83 (Methode=ATR)
+2019-12-12T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 40.83 → 41.51 (Methode=ATR)
+2019-12-17T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 41.51 → 41.58 (Methode=ATR)
+2019-12-17T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 41.58 → 41.67 (Methode=ATR)
+2019-12-17T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 41.67 → 41.69 (Methode=ATR)
+2019-12-18T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 41.69 → 41.70 (Methode=ATR)
+2019-12-19T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 41.70 → 42.21 (Methode=ATR)
+2019-12-20T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 42.21 → 42.76 (Methode=ATR)
+2019-12-20T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 42.76 → 42.94 (Methode=ATR)
+2019-12-20T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 42.94 → 43.14 (Methode=ATR)
+2019-12-23T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 43.14 → 44.09 (Methode=ATR)
+2019-12-23T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 44.09 → 44.26 (Methode=ATR)
+2019-12-23T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 44.26 → 44.45 (Methode=ATR)
+2019-12-23T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 44.45 → 44.46 (Methode=ATR)
+2019-12-24T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 44.46 → 45.16 (Methode=ATR)
+2019-12-24T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 45.16 → 45.44 (Methode=ATR)
+2019-12-26T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 45.44 → 45.76 (Methode=ATR)
+2020-01-02T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 45.76 → 46.56 (Methode=ATR)
+2020-01-02T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 46.56 → 47.16 (Methode=ATR)
+2020-01-02T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 47.16 → 47.64 (Methode=ATR)
+2020-01-02T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 47.64 → 47.83 (Methode=ATR)
+2020-01-09T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 47.83 → 48.16 (Methode=ATR)
+2020-01-16T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 48.16 → 48.19 (Methode=ATR)
+2020-01-16T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 48.19 → 48.42 (Methode=ATR)
+2020-01-16T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 48.42 → 48.59 (Methode=ATR)
+2020-01-17T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 48.59 → 49.24 (Methode=ATR)
+2020-01-17T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 49.24 → 49.67 (Methode=ATR)
+2020-01-17T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 49.67 → 49.78 (Methode=ATR)
+2020-01-21T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 49.78 → 50.38 (Methode=ATR)
+2020-01-22T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 50.38 → 50.48 (Methode=ATR)
+2020-01-22T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 50.48 → 50.58 (Methode=ATR)
+2020-01-23T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 50.58 → 50.68 (Methode=ATR)
+2020-02-10T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 50.68 → 50.75 (Methode=ATR)
+2020-02-11T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 50.75 → 52.28 (Methode=ATR)
+2020-02-11T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 52.28 → 52.59 (Methode=ATR)
+2020-02-13T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 52.59 → 53.15 (Methode=ATR)
+2020-02-14T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 53.15 → 53.71 (Methode=ATR)
+2020-02-14T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 53.71 → 53.92 (Methode=ATR)
+2020-02-18T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 53.92 → 54.94 (Methode=ATR)
+2020-02-18T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 54.94 → 56.12 (Methode=ATR)
+2020-02-19T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 56.12 → 56.97 (Methode=ATR)
+2020-02-19T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 56.97 → 57.25 (Methode=ATR)
+2020-02-19T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 57.25 → 57.29 (Methode=ATR)
+2020-07-22T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 57.29 → 58.21 (Methode=ATR)
+2020-07-22T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 58.21 → 59.17 (Methode=ATR)
+2020-07-22T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 59.17 → 59.58 (Methode=ATR)
+2020-07-22T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 59.58 → 59.60 (Methode=ATR)
+2020-07-23T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 59.60 → 59.72 (Methode=ATR)
+2020-07-24T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 59.72 → 64.59 (Methode=ATR)
+2020-07-24T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 64.59 → 64.67 (Methode=ATR)
+2020-07-24T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 64.67 → 66.00 (Methode=ATR)
+2020-07-24T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 66.00 → 66.12 (Methode=ATR)
+2020-07-28T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 66.12 → 66.21 (Methode=ATR)
+2020-07-29T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 66.21 → 72.73 (Methode=ATR)
+2020-07-30T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 72.73 → 74.39 (Methode=ATR)
+2020-07-30T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 74.39 → 74.46 (Methode=ATR)
+2020-07-30T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 74.46 → 74.79 (Methode=ATR)
+2020-08-03T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 74.79 → 74.84 (Methode=ATR)
+2020-08-04T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 74.84 → 79.62 (Methode=ATR)
+2020-08-04T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 79.62 → 80.75 (Methode=ATR)
+2020-08-04T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 80.75 → 81.30 (Methode=ATR)
+2020-08-04T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 81.30 → 81.51 (Methode=ATR)
+2020-08-05T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 81.51 → 81.64 (Methode=ATR)
+2020-08-05T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 81.64 → 81.77 (Methode=ATR)
+2020-08-05T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 81.77 → 82.21 (Methode=ATR)
+2020-08-06T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 82.21 → 82.84 (Methode=ATR)
+2020-08-06T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 82.84 → 83.21 (Methode=ATR)
+2020-08-06T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 83.21 → 83.57 (Methode=ATR)
+2020-08-06T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 83.57 → 83.81 (Methode=ATR)
+2020-08-25T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 83.81 → 83.91 (Methode=ATR)
+2020-08-26T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 83.91 → 83.98 (Methode=ATR)
+2020-08-31T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 83.98 → 85.88 (Methode=ATR)
+2020-08-31T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 85.88 → 88.63 (Methode=ATR)
+2020-09-01T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 88.63 → 89.08 (Methode=ATR)
+2020-11-30T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 89.08 → 89.27 (Methode=ATR)
+2020-11-30T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 89.27 → 89.39 (Methode=ATR)
+2020-11-30T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 89.39 → 90.04 (Methode=ATR)
+2020-12-01T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 90.04 → 90.66 (Methode=ATR)
+2020-12-02T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 90.66 → 91.80 (Methode=ATR)
+2020-12-14T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 91.80 → 92.39 (Methode=ATR)
+2020-12-15T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 92.39 → 93.07 (Methode=ATR)
+2020-12-15T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 93.07 → 93.53 (Methode=ATR)
+2020-12-15T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 93.53 → 94.33 (Methode=ATR)
+2020-12-15T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 94.33 → 94.33 (Methode=ATR)
+2020-12-17T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 94.33 → 94.48 (Methode=ATR)
+2020-12-18T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 94.48 → 94.63 (Methode=ATR)
+2020-12-18T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 94.63 → 94.77 (Methode=ATR)
+2021-01-11T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 94.77 → 94.96 (Methode=ATR)
+2021-01-11T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 94.96 → 95.14 (Methode=ATR)
+2021-01-12T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 95.14 → 95.20 (Methode=ATR)
+2021-07-28T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 95.20 → 95.37 (Methode=ATR)
+2021-07-29T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 95.37 → 99.24 (Methode=ATR)
+2021-07-29T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 99.24 → 100.88 (Methode=ATR)
+2021-07-30T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 100.88 → 100.91 (Methode=ATR)
+2021-07-30T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 100.91 → 101.98 (Methode=ATR)
+2021-07-30T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 101.98 → 102.20 (Methode=ATR)
+2021-07-30T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 102.20 → 102.23 (Methode=ATR)
+2021-08-02T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 102.23 → 103.35 (Methode=ATR)
+2021-08-02T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 103.35 → 104.91 (Methode=ATR)
+2021-08-03T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 104.91 → 106.00 (Methode=ATR)
+2021-08-03T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 106.00 → 108.82 (Methode=ATR)
+2021-08-04T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 108.82 → 112.47 (Methode=ATR)
+2021-08-04T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 112.47 → 114.06 (Methode=ATR)
+2021-10-18T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 114.06 → 114.10 (Methode=ATR)
+2021-10-19T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 114.10 → 114.30 (Methode=ATR)
+2021-10-21T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 114.30 → 115.75 (Methode=ATR)
+2021-10-21T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 115.75 → 116.77 (Methode=ATR)
+2021-10-21T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 116.77 → 117.07 (Methode=ATR)
+2021-10-22T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 117.07 → 117.33 (Methode=ATR)
+2021-10-22T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 117.33 → 117.40 (Methode=ATR)
+2021-10-22T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 117.40 → 117.43 (Methode=ATR)
+2021-10-25T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 117.43 → 118.76 (Methode=ATR)
+2021-10-25T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 118.76 → 120.07 (Methode=ATR)
+2021-10-26T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 120.07 → 121.98 (Methode=ATR)
+2021-11-02T14:30:00.000+01:00,↑ LONG Trail SL angehoben: 121.98 → 122.57 (Methode=ATR)
+2021-11-02T16:30:00.000+01:00,↑ LONG Trail SL angehoben: 122.57 → 123.57 (Methode=ATR)
+2021-11-02T20:30:00.000+01:00,↑ LONG Trail SL angehoben: 123.57 → 123.92 (Methode=ATR)
+2021-11-03T14:30:00.000+01:00,↑ LONG Trail SL angehoben: 123.92 → 125.17 (Methode=ATR)
+2021-11-03T16:30:00.000+01:00,↑ LONG Trail SL angehoben: 125.17 → 125.87 (Methode=ATR)
+2021-11-03T18:30:00.000+01:00,↑ LONG Trail SL angehoben: 125.87 → 126.43 (Methode=ATR)
+2021-11-03T20:30:00.000+01:00,↑ LONG Trail SL angehoben: 126.43 → 127.08 (Methode=ATR)
+2021-11-04T14:30:00.000+01:00,↑ LONG Trail SL angehoben: 127.08 → 129.78 (Methode=ATR)
+2021-11-04T16:30:00.000+01:00,↑ LONG Trail SL angehoben: 129.78 → 131.83 (Methode=ATR)
+2021-11-04T18:30:00.000+01:00,↑ LONG Trail SL angehoben: 131.83 → 132.97 (Methode=ATR)
+2021-11-04T20:30:00.000+01:00,↑ LONG Trail SL angehoben: 132.97 → 133.27 (Methode=ATR)
+2021-11-05T14:30:00.000+01:00,↑ LONG Trail SL angehoben: 133.27 → 134.45 (Methode=ATR)
+2021-11-08T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 134.45 → 143.14 (Methode=ATR)
+2021-11-08T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 143.14 → 145.02 (Methode=ATR)
+2021-11-16T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 145.02 → 145.64 (Methode=ATR)
+2021-11-16T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 145.64 → 146.64 (Methode=ATR)
+2021-11-16T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 146.64 → 147.22 (Methode=ATR)
+2021-11-17T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 147.22 → 148.70 (Methode=ATR)
+2021-11-18T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 148.70 → 150.13 (Methode=ATR)
+2021-11-19T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 150.13 → 150.48 (Methode=ATR)
+2021-11-22T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 150.48 → 152.06 (Methode=ATR)
+2021-11-29T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 152.06 → 153.08 (Methode=ATR)
+2021-11-29T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 153.08 → 155.29 (Methode=ATR)
+2021-11-29T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 155.29 → 155.70 (Methode=ATR)
+2024-01-18T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 155.70 → 157.33 (Methode=ATR)
+2024-01-19T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 157.33 → 159.68 (Methode=ATR)
+2024-01-19T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 159.68 → 161.95 (Methode=ATR)
+2024-01-19T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 161.95 → 165.27 (Methode=ATR)
+2024-01-19T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 165.27 → 167.44 (Methode=ATR)
+2024-01-24T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 167.44 → 170.91 (Methode=ATR)
+2024-01-24T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 170.91 → 172.48 (Methode=ATR)
+2024-01-25T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 172.48 → 174.77 (Methode=ATR)
+2024-02-29T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 174.77 → 179.95 (Methode=ATR)
+2024-02-29T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 179.95 → 182.77 (Methode=ATR)
+2024-02-29T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 182.77 → 185.00 (Methode=ATR)
+2024-02-29T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 185.00 → 185.83 (Methode=ATR)
+2024-03-01T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 185.83 → 192.19 (Methode=ATR)
+2024-03-01T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 192.19 → 193.39 (Methode=ATR)
+2024-03-01T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 193.39 → 194.26 (Methode=ATR)
+2024-03-01T21:30:00.000+01:00,↑ LONG Trail SL angehoben: 194.26 → 195.83 (Methode=ATR)
+2024-03-04T15:30:00.000+01:00,↑ LONG Trail SL angehoben: 195.83 → 200.32 (Methode=ATR)
+2024-03-04T19:30:00.000+01:00,↑ LONG Trail SL angehoben: 200.32 → 200.85 (Methode=ATR)
+2024-03-06T17:30:00.000+01:00,↑ LONG Trail SL angehoben: 200.85 → 204.63 (Methode=ATR)
+2025-10-08T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 204.63 → 210.75 (Methode=ATR)
+2025-10-08T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 210.75 → 215.76 (Methode=ATR)
+2025-10-08T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 215.76 → 219.70 (Methode=ATR)
+2025-10-08T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 219.70 → 222.51 (Methode=ATR)
+2025-10-15T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 222.51 → 224.25 (Methode=ATR)
+2025-10-15T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 224.25 → 224.59 (Methode=ATR)
+2025-10-15T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 224.59 → 225.76 (Methode=ATR)
+2025-10-16T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 225.76 → 226.33 (Methode=ATR)
+2025-10-20T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 226.33 → 229.11 (Methode=ATR)
+2025-10-20T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 229.11 → 230.08 (Methode=ATR)
+2025-10-24T15:30:00.000+02:00,↑ LONG Trail SL angehoben: 230.08 → 239.12 (Methode=ATR)
+2025-10-24T17:30:00.000+02:00,↑ LONG Trail SL angehoben: 239.12 → 240.69 (Methode=ATR)
+2025-10-24T19:30:00.000+02:00,↑ LONG Trail SL angehoben: 240.69 → 241.44 (Methode=ATR)
+2025-10-24T21:30:00.000+02:00,↑ LONG Trail SL angehoben: 241.44 → 243.19 (Methode=ATR)
+2025-10-27T14:30:00.000+01:00,↑ LONG Trail SL angehoben: 243.19 → 244.15 (Methode=ATR)
+2025-10-27T16:30:00.000+01:00,↑ LONG Trail SL angehoben: 244.15 → 245.61 (Methode=ATR)
+2025-10-27T18:30:00.000+01:00,↑ LONG Trail SL angehoben: 245.61 → 247.12 (Methode=ATR)
+2025-10-27T20:30:00.000+01:00,↑ LONG Trail SL angehoben: 247.12 → 250.12 (Methode=ATR)
+2025-10-28T14:30:00.000+01:00,↑ LONG Trail SL angehoben: 250.12 → 250.31 (Methode=ATR)
+2025-10-28T16:30:00.000+01:00,↑ LONG Trail SL angehoben: 250.31 → 251.57 (Methode=ATR)
+2025-10-29T14:30:00.000+01:00,↑ LONG Trail SL angehoben: 251.57 → 251.59 (Methode=ATR)
+2025-10-29T18:30:00.000+01:00,↑ LONG Trail SL angehoben: 251.59 → 254.05 (Methode=ATR)
+2025-10-29T20:30:00.000+01:00,↑ LONG Trail SL angehoben: 254.05 → 254.84 (Methode=ATR)
