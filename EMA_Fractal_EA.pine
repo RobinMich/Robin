@@ -9,6 +9,13 @@ strategy("EMA Fractal EA v3", overlay=true, default_qty_type=strategy.percent_of
          commission_type=strategy.commission.percent, commission_value=0.01, slippage=1)
 
 // ============================================================================
+// DEBUG LOGGING (Pine Logs)
+// ============================================================================
+
+grp_debug = "Debug Protokoll"
+debug_on = input.bool(true, "Debug Logging aktivieren", group=grp_debug)
+
+// ============================================================================
 // INPUTS
 // ============================================================================
 
@@ -59,6 +66,10 @@ sess_end    = input.int(20, "Ende (UTC)", minval=0, maxval=23, group=grp_time)
 cur_hour = hour(time, "UTC")
 in_session = not use_session or (cur_hour >= sess_start and cur_hour < sess_end)
 
+if debug_on and barstate.islast
+    log.info("═══════════ BAR #{0} | {1} | Close={2} ═══════════", bar_index, str.tostring(time, "yyyy-MM-dd HH:mm"), str.tostring(close, format.mintick))
+    log.info("Session: hour(UTC)={0}, in_session={1}", cur_hour, in_session)
+
 // HTF EMAs
 w_ema10 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_fast_len), lookahead=barmerge.lookahead_off)
 w_ema20 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_mid_len), lookahead=barmerge.lookahead_off)
@@ -90,6 +101,38 @@ cross_below = close < h2_ema20 and close[1] >= h2_ema20[1]
 setup_long  = trade_long  and htf_bullish and h2_ema10 < h2_ema20 and cross_above and in_session
 setup_short = trade_short and htf_bearish and h2_ema10 > h2_ema20 and cross_below and in_session
 
+// --- DEBUG: HTF & Setup Bedingungen ---
+if debug_on and barstate.islast
+    log.info("──── HTF Scanner ────")
+    log.info("W: EMA10={0} EMA20={1} EMA50={2}", str.tostring(w_ema10, format.mintick), str.tostring(w_ema20, format.mintick), str.tostring(w_ema50, format.mintick))
+    log.info("W_BULL(10>20>50)={0} | W_BEAR(10<20<50)={1}", cond_w_bull, cond_w_bear)
+    log.info("D: EMA10={0} EMA20={1}", str.tostring(d_ema10, format.mintick), str.tostring(d_ema20, format.mintick))
+    log.info("D_BULL(10>20)={0} | D_BEAR(10<20)={1}", cond_d_bull, cond_d_bear)
+    log.info("HTF_BULLISH={0} | HTF_BEARISH={1}", htf_bullish, htf_bearish)
+
+    log.info("──── H2 EMA & Cross ────")
+    log.info("H2: EMA10={0} EMA20={1} | EMA10<EMA20={2} | EMA10>EMA20={3}", str.tostring(h2_ema10, format.mintick), str.tostring(h2_ema20, format.mintick), h2_ema10 < h2_ema20, h2_ema10 > h2_ema20)
+    log.info("Close={0} Close[1]={1} | cross_above={2} | cross_below={3}", str.tostring(close, format.mintick), str.tostring(close[1], format.mintick), cross_above, cross_below)
+
+    log.info("──── Setup Signale ────")
+    if not trade_long
+        log.warning("Long Trades DEAKTIVIERT")
+    if not trade_short
+        log.warning("Short Trades DEAKTIVIERT")
+    if not htf_bullish and not htf_bearish
+        log.warning("Kein HTF Trend erkannt (weder BULL noch BEAR)")
+    if htf_bullish and not (h2_ema10 < h2_ema20)
+        log.warning("HTF bullish ABER kein H2 Pullback (EMA10 >= EMA20)")
+    if htf_bearish and not (h2_ema10 > h2_ema20)
+        log.warning("HTF bearish ABER kein H2 Pullback (EMA10 <= EMA20)")
+    if htf_bullish and h2_ema10 < h2_ema20 and not cross_above
+        log.warning("Long Setup bereit ABER kein Cross-Above auf dieser Bar")
+    if htf_bearish and h2_ema10 > h2_ema20 and not cross_below
+        log.warning("Short Setup bereit ABER kein Cross-Below auf dieser Bar")
+    if not in_session
+        log.warning("Außerhalb der Session ({0}-{1} UTC), aktuelle Stunde={2}", sess_start, sess_end, cur_hour)
+    log.info("setup_long={0} | setup_short={1}", setup_long, setup_short)
+
 // ============================================================================
 // FRACTALS
 // ============================================================================
@@ -113,6 +156,11 @@ fl_det = is_frac_low(fractal_lookback)
 fh_price = fh_det ? high[fractal_lookback] : na
 fl_price = fl_det ? low[fractal_lookback] : na
 
+// --- DEBUG: Fractal Erkennung ---
+if debug_on and barstate.islast
+    log.info("──── Fractals ────")
+    log.info("Fractal High erkannt={0} (Preis={1}) | Fractal Low erkannt={2} (Preis={3})", fh_det, fh_det ? str.tostring(fh_price, format.mintick) : "na", fl_det, fl_det ? str.tostring(fl_price, format.mintick) : "na")
+
 // ============================================================================
 // ZUSTANDSMASCHINE
 // ============================================================================
@@ -135,19 +183,30 @@ if fh_det
     last_fh := fh_price
 
 // --- Setup ---
+if debug_on and barstate.islast
+    log.info("──── Zustand vor Setup ────")
+    log.info("waiting={0} | trade_dir={1} | order_pend={2} | position={3} | bars_setup={4}", waiting, trade_dir, order_pend, strategy.position_size, bars_setup)
+    log.info("last_fl={0} | last_fh={1}", not na(last_fl) ? str.tostring(last_fl, format.mintick) : "na", not na(last_fh) ? str.tostring(last_fh, format.mintick) : "na")
+
 if setup_long and not waiting and strategy.position_size == 0 and not order_pend
     waiting   := true
     bars_setup := 0
     trade_dir := 1
+    if debug_on
+        log.info("✦ LONG SETUP aktiviert – warte auf Fractal High")
 
 if setup_short and not waiting and strategy.position_size == 0 and not order_pend
     waiting   := true
     bars_setup := 0
     trade_dir := -1
+    if debug_on
+        log.info("✦ SHORT SETUP aktiviert – warte auf Fractal Low")
 
 if waiting
     bars_setup += 1
 if waiting and bars_setup > max_candles_fractal
+    if debug_on
+        log.warning("⏰ TIMEOUT: {0} Bars ohne Fractal (Max={1}) → Setup verfallen", bars_setup, max_candles_fractal)
     waiting   := false
     bars_setup := na
     trade_dir := 0
@@ -155,33 +214,59 @@ if waiting and bars_setup > max_candles_fractal
 // --- Fractal → Order ---
 if waiting and trade_dir == 1 and fh_det and bars_setup <= max_candles_fractal
     dp = math.abs(fh_price - h2_ema20) / h2_ema20 * 100
+    if debug_on
+        log.info("──── LONG: Fractal High gefunden ────")
+        log.info("FH Preis={0} | H2_EMA20={1} | Abstand={2}%", str.tostring(fh_price, format.mintick), str.tostring(h2_ema20, format.mintick), str.tostring(dp, "#.##"))
     if not use_distance_filter or dp <= max_distance_pct
         entry_px := fh_price
         if sl_mode == "Volles Fractal Low"
             sl_px := last_fl
         else
             sl_px := entry_px - (entry_px - last_fl) / 2
+        if debug_on
+            log.info("Entry={0} | SL={1} (mode={2}) | last_fl={3}", str.tostring(entry_px, format.mintick), not na(sl_px) ? str.tostring(sl_px, format.mintick) : "na", sl_mode, not na(last_fl) ? str.tostring(last_fl, format.mintick) : "na")
         if not na(sl_px) and sl_px < entry_px
             order_pend   := true
             waiting      := false
             bars_setup   := na
             be_active    := false
             partial_done := false
+            if debug_on
+                log.info("→ LONG ORDER PENDING gesetzt: Entry={0} SL={1}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick))
+        else
+            if debug_on
+                log.error("✘ LONG ORDER ABGELEHNT: SL ungültig! sl_px={0} entry_px={1} (SL muss < Entry sein und nicht na)", not na(sl_px) ? str.tostring(sl_px, format.mintick) : "NA", str.tostring(entry_px, format.mintick))
+    else
+        if debug_on
+            log.warning("✘ LONG: Abstandsfilter blockiert! Abstand={0}% > Max={1}%", str.tostring(dp, "#.##"), str.tostring(max_distance_pct, "#.##"))
 
 if waiting and trade_dir == -1 and fl_det and bars_setup <= max_candles_fractal
     dp = math.abs(fl_price - h2_ema20) / h2_ema20 * 100
+    if debug_on
+        log.info("──── SHORT: Fractal Low gefunden ────")
+        log.info("FL Preis={0} | H2_EMA20={1} | Abstand={2}%", str.tostring(fl_price, format.mintick), str.tostring(h2_ema20, format.mintick), str.tostring(dp, "#.##"))
     if not use_distance_filter or dp <= max_distance_pct
         entry_px := fl_price
         if sl_mode == "Volles Fractal Low"
             sl_px := last_fh
         else
             sl_px := entry_px + (last_fh - entry_px) / 2
+        if debug_on
+            log.info("Entry={0} | SL={1} (mode={2}) | last_fh={3}", str.tostring(entry_px, format.mintick), not na(sl_px) ? str.tostring(sl_px, format.mintick) : "na", sl_mode, not na(last_fh) ? str.tostring(last_fh, format.mintick) : "na")
         if not na(sl_px) and sl_px > entry_px
             order_pend   := true
             waiting      := false
             bars_setup   := na
             be_active    := false
             partial_done := false
+            if debug_on
+                log.info("→ SHORT ORDER PENDING gesetzt: Entry={0} SL={1}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick))
+        else
+            if debug_on
+                log.error("✘ SHORT ORDER ABGELEHNT: SL ungültig! sl_px={0} entry_px={1} (SL muss > Entry sein und nicht na)", not na(sl_px) ? str.tostring(sl_px, format.mintick) : "NA", str.tostring(entry_px, format.mintick))
+    else
+        if debug_on
+            log.warning("✘ SHORT: Abstandsfilter blockiert! Abstand={0}% > Max={1}%", str.tostring(dp, "#.##"), str.tostring(max_distance_pct, "#.##"))
 
 // --- Order ausführen ---
 if order_pend and strategy.position_size == 0
@@ -190,20 +275,36 @@ if order_pend and strategy.position_size == 0
     sl_distance = math.abs(entry_px - sl_px)
     qty = sl_distance > 0 ? risk_amount / sl_distance : 0
 
+    if debug_on
+        log.info("──── Order Berechnung ────")
+        log.info("Equity={0} | Risk%={1} | Risk$={2}", str.tostring(strategy.equity, "#.##"), risk_pct, str.tostring(risk_amount, "#.##"))
+        log.info("Entry={0} | SL={1} | SL-Abstand={2} | Qty={3}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick), str.tostring(sl_distance, format.mintick), str.tostring(qty, "#.########"))
+
     if trade_dir == 1 and qty > 0
         strategy.entry("Long", strategy.long, qty=qty, stop=entry_px)
         strategy.exit("SL Long", "Long", stop=sl_px)
+        if debug_on
+            log.info("▶ LONG STOP-ORDER platziert: Qty={0} Entry(Stop)={1} SL={2}", str.tostring(qty, "#.########"), str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick))
     else if trade_dir == -1 and qty > 0
         strategy.entry("Short", strategy.short, qty=qty, stop=entry_px)
         strategy.exit("SL Short", "Short", stop=sl_px)
+        if debug_on
+            log.info("▶ SHORT STOP-ORDER platziert: Qty={0} Entry(Stop)={1} SL={2}", str.tostring(qty, "#.########"), str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick))
+    else
+        if debug_on
+            log.error("✘ ORDER NICHT PLATZIERT: qty={0} (muss > 0 sein) | trade_dir={1}", str.tostring(qty, "#.########"), trade_dir)
 
 if order_pend and strategy.position_size != 0
+    if debug_on
+        log.info("✓ POSITION ERÖFFNET: Richtung={0} | Size={1} | Trail SL wird gesetzt auf {2}", trade_dir == 1 ? "LONG" : "SHORT", str.tostring(strategy.position_size, "#.########"), str.tostring(sl_px, format.mintick))
     order_pend := false
     trail_sl   := sl_px
 
 if order_pend
     cancel_it = (trade_dir == 1 and not htf_bullish) or (trade_dir == -1 and not htf_bearish)
     if cancel_it
+        if debug_on
+            log.warning("⊘ ORDER STORNIERT: HTF Trend nicht mehr gültig (trade_dir={0}, htf_bullish={1}, htf_bearish={2})", trade_dir, htf_bullish, htf_bearish)
         strategy.cancel_all()
         order_pend := false
         entry_px   := na
@@ -216,6 +317,7 @@ if order_pend
 
 // --- LONG Trailing ---
 if strategy.position_size > 0 and trade_dir == 1
+    float _old_trail = trail_sl
     if trail_mode == "Fractal" and fl_det and not na(fl_price)
         if fl_price > trail_sl
             trail_sl := fl_price
@@ -232,6 +334,9 @@ if strategy.position_size > 0 and trade_dir == 1
         if h2_ema_trail > trail_sl
             trail_sl := h2_ema_trail
 
+    if debug_on and trail_sl != _old_trail
+        log.info("↑ LONG Trail SL angehoben: {0} → {1} (Methode={2})", str.tostring(_old_trail, format.mintick), str.tostring(trail_sl, format.mintick), trail_mode)
+
     // SL Exit aktualisieren
     if partial_done
         strategy.exit("Trail Rest Long", "Long", stop=trail_sl)
@@ -240,6 +345,7 @@ if strategy.position_size > 0 and trade_dir == 1
 
 // --- SHORT Trailing ---
 if strategy.position_size < 0 and trade_dir == -1
+    float _old_trail_s = trail_sl
     if trail_mode == "Fractal" and fh_det and not na(fh_price)
         if fh_price < trail_sl
             trail_sl := fh_price
@@ -256,6 +362,9 @@ if strategy.position_size < 0 and trade_dir == -1
         if h2_ema_trail < trail_sl
             trail_sl := h2_ema_trail
 
+    if debug_on and trail_sl != _old_trail_s
+        log.info("↓ SHORT Trail SL gesenkt: {0} → {1} (Methode={2})", str.tostring(_old_trail_s, format.mintick), str.tostring(trail_sl, format.mintick), trail_mode)
+
     if partial_done
         strategy.exit("Trail Rest Short", "Short", stop=trail_sl)
     else
@@ -271,12 +380,16 @@ if strategy.position_size > 0 and trade_dir == 1 and use_breakeven and not be_ac
         be_active := true
         if entry_px > trail_sl
             trail_sl := entry_px
+        if debug_on
+            log.info("✓ LONG BREAKEVEN aktiviert: Trail SL → {0}", str.tostring(trail_sl, format.mintick))
 
         if partial_mode == "Breakeven" and not partial_done
             close_qty = math.round(strategy.position_size * partial_tp_pct / 100, 2)
             if close_qty > 0
                 strategy.close("Long", qty=close_qty, comment="Partial TP")
                 partial_done := true
+                if debug_on
+                    log.info("✓ PARTIAL TP LONG: {0}% = {1} Einheiten geschlossen", partial_tp_pct, str.tostring(close_qty, "#.##"))
 
         strategy.exit("BE Long", "Long", stop=trail_sl)
 
@@ -286,12 +399,16 @@ if strategy.position_size < 0 and trade_dir == -1 and use_breakeven and not be_a
         be_active := true
         if entry_px < trail_sl
             trail_sl := entry_px
+        if debug_on
+            log.info("✓ SHORT BREAKEVEN aktiviert: Trail SL → {0}", str.tostring(trail_sl, format.mintick))
 
         if partial_mode == "Breakeven" and not partial_done
             close_qty = math.round(math.abs(strategy.position_size) * partial_tp_pct / 100, 2)
             if close_qty > 0
                 strategy.close("Short", qty=close_qty, comment="Partial TP")
                 partial_done := true
+                if debug_on
+                    log.info("✓ PARTIAL TP SHORT: {0}% = {1} Einheiten geschlossen", partial_tp_pct, str.tostring(close_qty, "#.##"))
 
         strategy.exit("BE Short", "Short", stop=trail_sl)
 
@@ -300,6 +417,8 @@ if strategy.position_size < 0 and trade_dir == -1 and use_breakeven and not be_a
 // ============================================================================
 
 if strategy.position_size == 0 and not order_pend
+    if debug_on and trade_dir != 0
+        log.info("♻ RESET: Position geschlossen, alle Variablen zurückgesetzt")
     trade_dir    := 0
     be_active    := false
     partial_done := false
