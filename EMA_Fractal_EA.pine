@@ -280,14 +280,16 @@ if waiting and trade_dir == -1 and fl_det and bars_setup <= max_candles_fractal
 // --- Order ausführen ---
 if order_pend and strategy.position_size == 0
     // Positionsgröße basierend auf Risiko %
+    // syminfo.pointvalue = Geldwert pro 1 Punkt Preisänderung pro Kontrakt
     risk_amount = strategy.equity * risk_pct / 100
     sl_distance = math.abs(entry_px - sl_px)
-    qty = sl_distance > 0 ? risk_amount / sl_distance : 0
+    loss_per_contract = sl_distance * syminfo.pointvalue
+    qty = loss_per_contract > 0 ? risk_amount / loss_per_contract : 0
 
     if debug_on
         log.info("──── Order Berechnung ────")
-        log.info("Equity={0} | Risk%={1} | Risk$={2}", str.tostring(strategy.equity, "#.##"), risk_pct, str.tostring(risk_amount, "#.##"))
-        log.info("Entry={0} | SL={1} | SL-Abstand={2} | Qty={3}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick), str.tostring(sl_distance, format.mintick), str.tostring(qty, "#.########"))
+        log.info("Equity={0} | Risk%={1} | Risk$={2} | pointvalue={3} | mintick={4}", str.tostring(strategy.equity, "#.##"), risk_pct, str.tostring(risk_amount, "#.##"), str.tostring(syminfo.pointvalue, "#.########"), str.tostring(syminfo.mintick, "#.########"))
+        log.info("Entry={0} | SL={1} | SL-Dist={2} | Loss/Kontrakt={3} | Qty={4}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick), str.tostring(sl_distance, format.mintick), str.tostring(loss_per_contract, "#.########"), str.tostring(qty, "#.########"))
 
     if trade_dir == 1 and qty > 0
         strategy.entry("Long", strategy.long, qty=qty, stop=entry_px)
@@ -440,7 +442,7 @@ if strategy.position_size < 0 and trade_dir == -1 and use_breakeven and not be_a
 // RESET
 // ============================================================================
 
-if strategy.position_size == 0 and not order_pend
+if strategy.position_size == 0 and not order_pend and not waiting
     if debug_on and trade_dir != 0
         log.info("♻ RESET: Position geschlossen, alle Variablen zurückgesetzt")
     trade_dir    := 0
