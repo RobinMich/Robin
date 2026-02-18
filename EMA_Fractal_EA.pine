@@ -1,11 +1,11 @@
 // This Pine Script™ source code is subject to the terms of the Mozilla Public License 2.0
 // https://mozilla.org/MPL/2.0/
-// © Robin - EMA Fractal Expert Advisor v3.0
-// Neu: 4 Trailing-Methoden, konfigurierbares Risiko, Partial-TP Modi, Range-Filter
+// © Robin - EMA Fractal Expert Advisor v4.0
+// v4: Optimiertes Breakeven (1R-Schwelle + ATR-Puffer), lockere Filter, höherer Profit
 
 //@version=6
-strategy("EMA Fractal EA v3", overlay=true, default_qty_type=strategy.percent_of_equity,
-         default_qty_value=1, initial_capital=10000,
+strategy("EMA Fractal EA v4", overlay=true, default_qty_type=strategy.percent_of_equity,
+         default_qty_value=2, initial_capital=10000,
          commission_type=strategy.commission.percent, commission_value=0.01, slippage=1)
 
 // ============================================================================
@@ -30,23 +30,23 @@ trade_short = input.bool(true, "Short Trades", group=grp_dir)
 
 grp_frac = "Fractal"
 fractal_lookback    = input.int(2, "Lookback", minval=1, maxval=5, group=grp_frac)
-max_candles_fractal = input.int(20, "Max Kerzen für Fractal", minval=1, maxval=50, group=grp_frac)
+max_candles_fractal = input.int(30, "Max Kerzen für Fractal", minval=1, maxval=100, group=grp_frac)
 
 grp_filter = "Abstandsfilter"
 use_distance_filter = input.bool(true, "Aktivieren", group=grp_filter)
-max_distance_pct    = input.float(2.0, "Max Abstand (%)", minval=0.01, maxval=10.0, step=0.1, group=grp_filter)
+max_distance_pct    = input.float(5.0, "Max Abstand (%)", minval=0.1, maxval=20.0, step=0.5, group=grp_filter)
 
 grp_pend = "Pending Order"
-max_bars_pending    = input.int(20, "Max Bars bis Verfall", minval=1, maxval=100, group=grp_pend,
+max_bars_pending    = input.int(30, "Max Bars bis Verfall", minval=1, maxval=200, group=grp_pend,
                      tooltip="Pending Stop-Order verfällt nach X Bars ohne Fill")
-max_entry_dist_pct  = input.float(5.0, "Max Entry-Abstand (%)", minval=0.5, maxval=15.0, step=0.5, group=grp_pend,
-                     tooltip="Storniere Order wenn Entry > X% vom aktuellen Preis entfernt (erst nach 3 Bars geprüft)")
+max_entry_dist_pct  = input.float(10.0, "Max Entry-Abstand (%)", minval=1.0, maxval=30.0, step=1.0, group=grp_pend,
+                     tooltip="Storniere Order wenn Entry > X% vom aktuellen Preis entfernt (erst nach 5 Bars geprüft)")
 
 grp_sl = "Stop Loss"
-sl_mode = input.string("Halber Abstand", "SL Modus", options=["Volles Fractal Low", "Halber Abstand"], group=grp_sl)
+sl_mode = input.string("Volles Fractal Low", "SL Modus", options=["Volles Fractal Low", "Halber Abstand"], group=grp_sl)
 
 grp_risk = "Risiko Management"
-risk_pct = input.float(1.0, "Risiko pro Trade (%)", minval=0.1, maxval=5.0, step=0.1, group=grp_risk)
+risk_pct = input.float(2.0, "Risiko pro Trade (%)", minval=0.1, maxval=10.0, step=0.1, group=grp_risk)
 
 grp_trail = "Trailing Stop"
 trail_mode     = input.string("ATR", "Trailing Methode", options=["Fractal", "ATR", "Chandelier", "EMA"], group=grp_trail)
@@ -55,12 +55,14 @@ atr_mult       = input.float(2.0, "ATR/Chandelier Multiplikator", minval=0.5, ma
 ema_trail_len  = input.int(10, "EMA Trail Periode", minval=1, group=grp_trail)
 
 grp_be = "Breakeven & Partial TP"
-use_breakeven  = input.bool(true, "Breakeven aktivieren", group=grp_be)
-partial_mode   = input.string("Breakeven", "Partial-TP Modus", options=["Breakeven", "Trail-Hit"], group=grp_be)
-partial_tp_pct = input.float(50.0, "Anteil schließen (%)", minval=10, maxval=90, step=5, group=grp_be)
+use_breakeven    = input.bool(true, "Breakeven aktivieren", group=grp_be)
+be_min_r         = input.float(1.0, "Min Profit für BE (x Risiko)", minval=0.3, maxval=5.0, step=0.1, group=grp_be,
+                   tooltip="Breakeven wird erst aktiviert wenn Gewinn >= X * initialem Risiko")
+partial_mode     = input.string("Breakeven", "Partial-TP Modus", options=["Breakeven", "Trail-Hit"], group=grp_be)
+partial_tp_pct   = input.float(50.0, "Anteil schließen (%)", minval=10, maxval=90, step=5, group=grp_be)
 
 grp_time = "Zeitfilter"
-use_session = input.bool(true, "Zeitfilter aktivieren", group=grp_time)
+use_session = input.bool(false, "Zeitfilter aktivieren", group=grp_time)
 sess_start  = input.int(8, "Start (UTC)", minval=0, maxval=23, group=grp_time)
 sess_end    = input.int(20, "Ende (UTC)", minval=0, maxval=23, group=grp_time)
 
@@ -182,6 +184,7 @@ var int   bars_pending  = 0
 var bool  be_active     = false
 var float trail_sl      = na
 var bool  partial_done  = false
+var float init_risk     = na
 
 if fl_det
     last_fl := fl_price
@@ -238,8 +241,9 @@ if waiting and trade_dir == 1 and fh_det and bars_setup <= max_candles_fractal
             bars_setup   := na
             be_active    := false
             partial_done := false
+            init_risk    := entry_px - sl_px
             if debug_on
-                log.info("→ LONG ORDER PENDING gesetzt: Entry={0} SL={1}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick))
+                log.info("→ LONG ORDER PENDING gesetzt: Entry={0} SL={1} InitRisk={2}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick), str.tostring(init_risk, format.mintick))
         else
             if debug_on
                 log.error("✘ LONG ORDER ABGELEHNT: SL ungültig! sl_px={0} entry_px={1} (SL muss < Entry sein und nicht na)", not na(sl_px) ? str.tostring(sl_px, format.mintick) : "NA", str.tostring(entry_px, format.mintick))
@@ -267,8 +271,9 @@ if waiting and trade_dir == -1 and fl_det and bars_setup <= max_candles_fractal
             bars_setup   := na
             be_active    := false
             partial_done := false
+            init_risk    := sl_px - entry_px
             if debug_on
-                log.info("→ SHORT ORDER PENDING gesetzt: Entry={0} SL={1}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick))
+                log.info("→ SHORT ORDER PENDING gesetzt: Entry={0} SL={1} InitRisk={2}", str.tostring(entry_px, format.mintick), str.tostring(sl_px, format.mintick), str.tostring(init_risk, format.mintick))
         else
             if debug_on
                 log.error("✘ SHORT ORDER ABGELEHNT: SL ungültig! sl_px={0} entry_px={1} (SL muss > Entry sein und nicht na)", not na(sl_px) ? str.tostring(sl_px, format.mintick) : "NA", str.tostring(entry_px, format.mintick))
@@ -306,7 +311,7 @@ if order_pend and strategy.position_size == 0
 
 if order_pend and strategy.position_size != 0
     if debug_on
-        log.info("✓ POSITION ERÖFFNET: Richtung={0} | Size={1} | Trail SL wird gesetzt auf {2}", trade_dir == 1 ? "LONG" : "SHORT", str.tostring(strategy.position_size, "#.########"), str.tostring(sl_px, format.mintick))
+        log.info("✓ POSITION ERÖFFNET: Richtung={0} | Size={1} | Trail SL={2} | InitRisk={3}", trade_dir == 1 ? "LONG" : "SHORT", str.tostring(strategy.position_size, "#.########"), str.tostring(sl_px, format.mintick), str.tostring(init_risk, format.mintick))
     order_pend := false
     trail_sl   := sl_px
 
@@ -317,9 +322,9 @@ if order_pend
     cancel_htf = (trade_dir == 1 and not htf_bullish) or (trade_dir == -1 and not htf_bearish)
     // Verfall: Zu viele Bars ohne Fill
     cancel_timeout = bars_pending > max_bars_pending
-    // Verfall: Entry-Preis zu weit vom aktuellen Preis entfernt (erst nach 3 Bars prüfen)
+    // Verfall: Entry-Preis zu weit vom aktuellen Preis entfernt (erst nach 5 Bars prüfen)
     entry_dist = math.abs(entry_px - close) / close * 100
-    cancel_dist = bars_pending > 3 and entry_dist > max_entry_dist_pct
+    cancel_dist = bars_pending > 5 and entry_dist > max_entry_dist_pct
 
     if cancel_htf or cancel_timeout or cancel_dist
         if debug_on
@@ -396,44 +401,50 @@ if strategy.position_size < 0 and trade_dir == -1
         strategy.exit("Trail Short", "Short", stop=trail_sl)
 
 // ============================================================================
-// BREAKEVEN & PARTIAL TP
+// BREAKEVEN & PARTIAL TP (v4: 1R-Schwelle + ATR-Puffer)
 // ============================================================================
 
 // --- LONG ---
 if strategy.position_size > 0 and trade_dir == 1 and use_breakeven and not be_active
-    if not na(entry_px) and close > entry_px
+    // BE erst bei Mindest-Profit (1R = initiales Risiko)
+    min_profit = not na(init_risk) ? init_risk * be_min_r : atr_val
+    if not na(entry_px) and close > entry_px + min_profit
         be_active := true
-        if entry_px > trail_sl
-            trail_sl := entry_px
+        // BE-Level = Entry + ATR-Puffer (nicht exakt Entry → verhindert Stopfishing)
+        be_level = entry_px + atr_val * 0.3
+        if be_level > trail_sl
+            trail_sl := be_level
         if debug_on
-            log.info("✓ LONG BREAKEVEN aktiviert: Trail SL → {0}", str.tostring(trail_sl, format.mintick))
+            log.info("✓ LONG BREAKEVEN bei 1R: Profit={0} >= MinProfit={1} | Trail SL → {2}", str.tostring(close - entry_px, format.mintick), str.tostring(min_profit, format.mintick), str.tostring(trail_sl, format.mintick))
 
         if partial_mode == "Breakeven" and not partial_done
             close_qty = math.round(strategy.position_size * partial_tp_pct / 100, 2)
             if close_qty > 0
-                strategy.close("Long", qty=close_qty, comment="Partial TP")
+                strategy.close("Long", qty=close_qty, comment="Partial TP @1R")
                 partial_done := true
                 if debug_on
-                    log.info("✓ PARTIAL TP LONG: {0}% = {1} Einheiten geschlossen", partial_tp_pct, str.tostring(close_qty, "#.##"))
+                    log.info("✓ PARTIAL TP LONG: {0}% = {1} Einheiten geschlossen @1R Profit", partial_tp_pct, str.tostring(close_qty, "#.##"))
 
         strategy.exit("BE Long", "Long", stop=trail_sl)
 
 // --- SHORT ---
 if strategy.position_size < 0 and trade_dir == -1 and use_breakeven and not be_active
-    if not na(entry_px) and close < entry_px
+    min_profit = not na(init_risk) ? init_risk * be_min_r : atr_val
+    if not na(entry_px) and close < entry_px - min_profit
         be_active := true
-        if entry_px < trail_sl
-            trail_sl := entry_px
+        be_level = entry_px - atr_val * 0.3
+        if be_level < trail_sl
+            trail_sl := be_level
         if debug_on
-            log.info("✓ SHORT BREAKEVEN aktiviert: Trail SL → {0}", str.tostring(trail_sl, format.mintick))
+            log.info("✓ SHORT BREAKEVEN bei 1R: Profit={0} >= MinProfit={1} | Trail SL → {2}", str.tostring(entry_px - close, format.mintick), str.tostring(min_profit, format.mintick), str.tostring(trail_sl, format.mintick))
 
         if partial_mode == "Breakeven" and not partial_done
             close_qty = math.round(math.abs(strategy.position_size) * partial_tp_pct / 100, 2)
             if close_qty > 0
-                strategy.close("Short", qty=close_qty, comment="Partial TP")
+                strategy.close("Short", qty=close_qty, comment="Partial TP @1R")
                 partial_done := true
                 if debug_on
-                    log.info("✓ PARTIAL TP SHORT: {0}% = {1} Einheiten geschlossen", partial_tp_pct, str.tostring(close_qty, "#.##"))
+                    log.info("✓ PARTIAL TP SHORT: {0}% = {1} Einheiten geschlossen @1R Profit", partial_tp_pct, str.tostring(close_qty, "#.##"))
 
         strategy.exit("BE Short", "Short", stop=trail_sl)
 
@@ -451,6 +462,7 @@ if strategy.position_size == 0 and not order_pend and not waiting
     entry_px     := na
     sl_px        := na
     bars_pending := 0
+    init_risk    := na
 
 // ============================================================================
 // PLOTS
@@ -476,7 +488,7 @@ plot(order_pend ? entry_px : na, "Pending", color.new(color.yellow, 0), 1, plot.
 // INFO-TABELLE
 // ============================================================================
 
-var table info = table.new(position.top_right, 2, 13, bgcolor=color.new(color.black, 80), frame_width=1, frame_color=color.gray)
+var table info = table.new(position.top_right, 2, 14, bgcolor=color.new(color.black, 80), frame_width=1, frame_color=color.gray)
 
 if barstate.islast
     table.cell(info, 0, 0, "Setting", text_color=color.white, text_size=size.small)
@@ -510,14 +522,17 @@ if barstate.islast
     table.cell(info, 1, 8, strategy.position_size != 0 ? str.tostring(trail_sl, format.mintick) : "-", text_color=color.orange, text_size=size.tiny)
 
     table.cell(info, 0, 9, "Breakeven", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 9, be_active ? "ON" : "OFF", text_color=be_active ? color.lime : color.gray, text_size=size.tiny)
+    table.cell(info, 1, 9, be_active ? "ON @1R" : "OFF", text_color=be_active ? color.lime : color.gray, text_size=size.tiny)
 
     table.cell(info, 0, 10, "Partial TP", text_color=color.white, text_size=size.tiny)
     table.cell(info, 1, 10, partial_done ? str.tostring(partial_tp_pct, "#") + "% DONE" : "OPEN", text_color=partial_done ? color.lime : color.gray, text_size=size.tiny)
 
-    table.cell(info, 0, 11, "Pending", text_color=color.white, text_size=size.tiny)
-    pend_txt = order_pend ? str.tostring(bars_pending) + "/" + str.tostring(max_bars_pending) + " Bars" : "-"
-    table.cell(info, 1, 11, pend_txt, text_color=order_pend ? color.yellow : color.gray, text_size=size.tiny)
+    table.cell(info, 0, 11, "Init Risk", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 11, not na(init_risk) ? str.tostring(init_risk, format.mintick) : "-", text_color=color.yellow, text_size=size.tiny)
 
-    table.cell(info, 0, 12, "ATR", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 12, str.tostring(atr_val, format.mintick), text_color=color.aqua, text_size=size.tiny)
+    table.cell(info, 0, 12, "Pending", text_color=color.white, text_size=size.tiny)
+    pend_txt = order_pend ? str.tostring(bars_pending) + "/" + str.tostring(max_bars_pending) + " Bars" : "-"
+    table.cell(info, 1, 12, pend_txt, text_color=order_pend ? color.yellow : color.gray, text_size=size.tiny)
+
+    table.cell(info, 0, 13, "ATR", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 13, str.tostring(atr_val, format.mintick), text_color=color.aqua, text_size=size.tiny)
