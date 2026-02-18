@@ -77,8 +77,7 @@ if debug_on and barstate.islast
     log.info("Session: hour(UTC)={0}, in_session={1}", cur_hour, in_session)
 
 // HTF EMAs
-w_ema10 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_fast_len), lookahead=barmerge.lookahead_off)
-w_ema20 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_mid_len), lookahead=barmerge.lookahead_off)
+w_ema5  = request.security(syminfo.tickerid, "W", ta.ema(close, 5), lookahead=barmerge.lookahead_off)
 w_ema50 = request.security(syminfo.tickerid, "W", ta.ema(close, ema_slow_len), lookahead=barmerge.lookahead_off)
 d_ema10 = request.security(syminfo.tickerid, "D", ta.ema(close, ema_fast_len), lookahead=barmerge.lookahead_off)
 d_ema20 = request.security(syminfo.tickerid, "D", ta.ema(close, ema_mid_len), lookahead=barmerge.lookahead_off)
@@ -92,11 +91,11 @@ h2_ema_trail = ta.ema(close, ema_trail_len)
 atr_val = ta.atr(atr_period)
 
 // Scanner
-cond_w_bull = w_ema10 > w_ema20 and w_ema20 > w_ema50
+cond_w_bull = w_ema5 > w_ema50
 cond_d_bull = d_ema10 > d_ema20
 htf_bullish = cond_w_bull and cond_d_bull
 
-cond_w_bear = w_ema10 < w_ema20 and w_ema20 < w_ema50
+cond_w_bear = w_ema5 < w_ema50
 cond_d_bear = d_ema10 < d_ema20
 htf_bearish = cond_w_bear and cond_d_bear
 
@@ -110,8 +109,8 @@ setup_short = trade_short and htf_bearish and h2_ema10 > h2_ema20 and cross_belo
 // --- DEBUG: HTF & Setup Bedingungen ---
 if debug_on and barstate.islast
     log.info("──── HTF Scanner ────")
-    log.info("W: EMA10={0} EMA20={1} EMA50={2}", str.tostring(w_ema10, format.mintick), str.tostring(w_ema20, format.mintick), str.tostring(w_ema50, format.mintick))
-    log.info("W_BULL(10>20>50)={0} | W_BEAR(10<20<50)={1}", cond_w_bull, cond_w_bear)
+    log.info("W: EMA5={0} EMA50={1}", str.tostring(w_ema5, format.mintick), str.tostring(w_ema50, format.mintick))
+    log.info("W_BULL(5>50)={0} | W_BEAR(5<50)={1}", cond_w_bull, cond_w_bear)
     log.info("D: EMA10={0} EMA20={1}", str.tostring(d_ema10, format.mintick), str.tostring(d_ema20, format.mintick))
     log.info("D_BULL(10>20)={0} | D_BEAR(10<20)={1}", cond_d_bull, cond_d_bear)
     log.info("HTF_BULLISH={0} | HTF_BEARISH={1}", htf_bullish, htf_bearish)
@@ -483,7 +482,7 @@ if barstate.islast
     table.cell(info, 0, 0, "Setting", text_color=color.white, text_size=size.small)
     table.cell(info, 1, 0, "Status", text_color=color.white, text_size=size.small)
 
-    table.cell(info, 0, 1, "W: EMA Stack", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 0, 1, "W: 5>50", text_color=color.white, text_size=size.tiny)
     table.cell(info, 1, 1, cond_w_bull ? "BULL" : cond_w_bear ? "BEAR" : "-", text_color=cond_w_bull ? color.lime : cond_w_bear ? color.red : color.gray, text_size=size.tiny)
 
     table.cell(info, 0, 2, "D: EMA10>20", text_color=color.white, text_size=size.tiny)
