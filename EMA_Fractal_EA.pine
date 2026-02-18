@@ -30,11 +30,17 @@ trade_short = input.bool(true, "Short Trades", group=grp_dir)
 
 grp_frac = "Fractal"
 fractal_lookback    = input.int(2, "Lookback", minval=1, maxval=5, group=grp_frac)
-max_candles_fractal = input.int(10, "Max Kerzen für Fractal", minval=1, maxval=50, group=grp_frac)
+max_candles_fractal = input.int(20, "Max Kerzen für Fractal", minval=1, maxval=50, group=grp_frac)
 
 grp_filter = "Abstandsfilter"
 use_distance_filter = input.bool(true, "Aktivieren", group=grp_filter)
 max_distance_pct    = input.float(0.5, "Max Abstand (%)", minval=0.01, maxval=5.0, step=0.05, group=grp_filter)
+
+grp_pend = "Pending Order"
+max_bars_pending    = input.int(20, "Max Bars bis Verfall", minval=1, maxval=100, group=grp_pend,
+                     tooltip="Pending Stop-Order verfällt nach X Bars ohne Fill")
+max_entry_dist_pct  = input.float(1.0, "Max Entry-Abstand (%)", minval=0.1, maxval=5.0, step=0.1, group=grp_pend,
+                     tooltip="Storniere Order wenn Entry > X% vom aktuellen Preis entfernt")
 
 grp_sl = "Stop Loss"
 sl_mode = input.string("Halber Abstand", "SL Modus", options=["Volles Fractal Low", "Halber Abstand"], group=grp_sl)
@@ -173,6 +179,7 @@ var float sl_px         = na
 var float last_fl       = na
 var float last_fh       = na
 var bool  order_pend    = false
+var int   bars_pending  = 0
 var bool  be_active     = false
 var float trail_sl      = na
 var bool  partial_done  = false
@@ -185,7 +192,7 @@ if fh_det
 // --- Setup ---
 if debug_on and barstate.islast
     log.info("──── Zustand vor Setup ────")
-    log.info("waiting={0} | trade_dir={1} | order_pend={2} | position={3} | bars_setup={4}", waiting, trade_dir, order_pend, strategy.position_size, bars_setup)
+    log.info("waiting={0} | trade_dir={1} | order_pend={2} | bars_pend={3} | position={4} | bars_setup={5}", waiting, trade_dir, order_pend, bars_pending, strategy.position_size, bars_setup)
     log.info("last_fl={0} | last_fh={1}", not na(last_fl) ? str.tostring(last_fl, format.mintick) : "na", not na(last_fh) ? str.tostring(last_fh, format.mintick) : "na")
 
 if setup_long and not waiting and strategy.position_size == 0 and not order_pend
@@ -227,6 +234,7 @@ if waiting and trade_dir == 1 and fh_det and bars_setup <= max_candles_fractal
             log.info("Entry={0} | SL={1} (mode={2}) | last_fl={3}", str.tostring(entry_px, format.mintick), not na(sl_px) ? str.tostring(sl_px, format.mintick) : "na", sl_mode, not na(last_fl) ? str.tostring(last_fl, format.mintick) : "na")
         if not na(sl_px) and sl_px < entry_px
             order_pend   := true
+            bars_pending := 0
             waiting      := false
             bars_setup   := na
             be_active    := false
@@ -255,6 +263,7 @@ if waiting and trade_dir == -1 and fl_det and bars_setup <= max_candles_fractal
             log.info("Entry={0} | SL={1} (mode={2}) | last_fh={3}", str.tostring(entry_px, format.mintick), not na(sl_px) ? str.tostring(sl_px, format.mintick) : "na", sl_mode, not na(last_fh) ? str.tostring(last_fh, format.mintick) : "na")
         if not na(sl_px) and sl_px > entry_px
             order_pend   := true
+            bars_pending := 0
             waiting      := false
             bars_setup   := na
             be_active    := false
@@ -301,15 +310,30 @@ if order_pend and strategy.position_size != 0
     trail_sl   := sl_px
 
 if order_pend
-    cancel_it = (trade_dir == 1 and not htf_bullish) or (trade_dir == -1 and not htf_bearish)
-    if cancel_it
+    bars_pending += 1
+
+    // Verfall: HTF Trend nicht mehr gültig
+    cancel_htf = (trade_dir == 1 and not htf_bullish) or (trade_dir == -1 and not htf_bearish)
+    // Verfall: Zu viele Bars ohne Fill
+    cancel_timeout = bars_pending > max_bars_pending
+    // Verfall: Entry-Preis zu weit vom aktuellen Preis entfernt
+    entry_dist = math.abs(entry_px - close) / close * 100
+    cancel_dist = entry_dist > max_entry_dist_pct
+
+    if cancel_htf or cancel_timeout or cancel_dist
         if debug_on
-            log.warning("⊘ ORDER STORNIERT: HTF Trend nicht mehr gültig (trade_dir={0}, htf_bullish={1}, htf_bearish={2})", trade_dir, htf_bullish, htf_bearish)
+            if cancel_htf
+                log.warning("⊘ ORDER STORNIERT: HTF Trend nicht mehr gültig (trade_dir={0}, htf_bullish={1}, htf_bearish={2})", trade_dir, htf_bullish, htf_bearish)
+            if cancel_timeout
+                log.warning("⊘ ORDER STORNIERT: Timeout nach {0} Bars (Max={1})", bars_pending, max_bars_pending)
+            if cancel_dist
+                log.warning("⊘ ORDER STORNIERT: Entry zu weit weg! Entry={0} Close={1} Abstand={2}% (Max={3}%)", str.tostring(entry_px, format.mintick), str.tostring(close, format.mintick), str.tostring(entry_dist, "#.##"), str.tostring(max_entry_dist_pct, "#.##"))
         strategy.cancel_all()
-        order_pend := false
-        entry_px   := na
-        sl_px      := na
-        trade_dir  := 0
+        order_pend   := false
+        bars_pending := 0
+        entry_px     := na
+        sl_px        := na
+        trade_dir    := 0
 
 // ============================================================================
 // TRAILING SL (4 Methoden)
@@ -425,6 +449,7 @@ if strategy.position_size == 0 and not order_pend
     trail_sl     := na
     entry_px     := na
     sl_px        := na
+    bars_pending := 0
 
 // ============================================================================
 // PLOTS
@@ -450,7 +475,7 @@ plot(order_pend ? entry_px : na, "Pending", color.new(color.yellow, 0), 1, plot.
 // INFO-TABELLE
 // ============================================================================
 
-var table info = table.new(position.top_right, 2, 12, bgcolor=color.new(color.black, 80), frame_width=1, frame_color=color.gray)
+var table info = table.new(position.top_right, 2, 13, bgcolor=color.new(color.black, 80), frame_width=1, frame_color=color.gray)
 
 if barstate.islast
     table.cell(info, 0, 0, "Setting", text_color=color.white, text_size=size.small)
@@ -489,5 +514,9 @@ if barstate.islast
     table.cell(info, 0, 10, "Partial TP", text_color=color.white, text_size=size.tiny)
     table.cell(info, 1, 10, partial_done ? str.tostring(partial_tp_pct, "#") + "% DONE" : "OPEN", text_color=partial_done ? color.lime : color.gray, text_size=size.tiny)
 
-    table.cell(info, 0, 11, "ATR", text_color=color.white, text_size=size.tiny)
-    table.cell(info, 1, 11, str.tostring(atr_val, format.mintick), text_color=color.aqua, text_size=size.tiny)
+    table.cell(info, 0, 11, "Pending", text_color=color.white, text_size=size.tiny)
+    pend_txt = order_pend ? str.tostring(bars_pending) + "/" + str.tostring(max_bars_pending) + " Bars" : "-"
+    table.cell(info, 1, 11, pend_txt, text_color=order_pend ? color.yellow : color.gray, text_size=size.tiny)
+
+    table.cell(info, 0, 12, "ATR", text_color=color.white, text_size=size.tiny)
+    table.cell(info, 1, 12, str.tostring(atr_val, format.mintick), text_color=color.aqua, text_size=size.tiny)
