@@ -34,13 +34,13 @@ max_candles_fractal = input.int(20, "Max Kerzen für Fractal", minval=1, maxval=
 
 grp_filter = "Abstandsfilter"
 use_distance_filter = input.bool(true, "Aktivieren", group=grp_filter)
-max_distance_pct    = input.float(0.5, "Max Abstand (%)", minval=0.01, maxval=5.0, step=0.05, group=grp_filter)
+max_distance_pct    = input.float(2.0, "Max Abstand (%)", minval=0.01, maxval=10.0, step=0.1, group=grp_filter)
 
 grp_pend = "Pending Order"
 max_bars_pending    = input.int(20, "Max Bars bis Verfall", minval=1, maxval=100, group=grp_pend,
                      tooltip="Pending Stop-Order verfällt nach X Bars ohne Fill")
-max_entry_dist_pct  = input.float(1.0, "Max Entry-Abstand (%)", minval=0.1, maxval=5.0, step=0.1, group=grp_pend,
-                     tooltip="Storniere Order wenn Entry > X% vom aktuellen Preis entfernt")
+max_entry_dist_pct  = input.float(5.0, "Max Entry-Abstand (%)", minval=0.5, maxval=15.0, step=0.5, group=grp_pend,
+                     tooltip="Storniere Order wenn Entry > X% vom aktuellen Preis entfernt (erst nach 3 Bars geprüft)")
 
 grp_sl = "Stop Loss"
 sl_mode = input.string("Halber Abstand", "SL Modus", options=["Volles Fractal Low", "Halber Abstand"], group=grp_sl)
@@ -317,9 +317,9 @@ if order_pend
     cancel_htf = (trade_dir == 1 and not htf_bullish) or (trade_dir == -1 and not htf_bearish)
     // Verfall: Zu viele Bars ohne Fill
     cancel_timeout = bars_pending > max_bars_pending
-    // Verfall: Entry-Preis zu weit vom aktuellen Preis entfernt
+    // Verfall: Entry-Preis zu weit vom aktuellen Preis entfernt (erst nach 3 Bars prüfen)
     entry_dist = math.abs(entry_px - close) / close * 100
-    cancel_dist = entry_dist > max_entry_dist_pct
+    cancel_dist = bars_pending > 3 and entry_dist > max_entry_dist_pct
 
     if cancel_htf or cancel_timeout or cancel_dist
         if debug_on
