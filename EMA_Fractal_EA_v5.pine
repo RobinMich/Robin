@@ -1,0 +1,377 @@
+// This Pine Script™ source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © EMA Fractal EA v5 – Optimized Multi-Asset Strategy
+// Based on Python backtest optimization across Gold, Crypto, US Tech Stocks, and Forex
+
+//@version=6
+strategy("EMA Fractal EA v5", overlay=true, default_qty_type=strategy.percent_of_equity,
+     default_qty_value=100, initial_capital=10000, commission_type=strategy.commission.percent,
+     commission_value=0.0, slippage=0, pyramiding=0, calc_on_every_tick=false,
+     process_orders_on_close=false, max_bars_back=5000)
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// INPUTS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+grp_ema    = "EMA Settings"
+ema1_len   = input.int(5,    "EMA 1 (Fast)",       minval=2,  group=grp_ema)
+ema2_len   = input.int(21,   "EMA 2 (Medium)",     minval=2,  group=grp_ema)
+ema3_len   = input.int(50,   "EMA 3 (Slow)",       minval=2,  group=grp_ema)
+ema4_len   = input.int(200,  "EMA 4 (Trend)",      minval=2,  group=grp_ema)
+
+grp_frac   = "Fractal Settings"
+fractal_n  = input.int(2,    "Fractal Bars (each side)", minval=1, maxval=5, group=grp_frac)
+
+grp_risk   = "Risk Management"
+risk_pct   = input.float(2.0, "Risk per Trade (%)", minval=0.1, maxval=10, step=0.1, group=grp_risk)
+sl_mode    = input.string("half", "SL Mode", options=["full", "half"], group=grp_risk,
+             tooltip="full = SL at opposite fractal, half = SL at half distance to opposite fractal")
+partial_tp = input.float(0.5, "Partial TP Fraction at 1R", minval=0, maxval=1, step=0.1, group=grp_risk,
+             tooltip="0 = no partial TP, 0.5 = close 50% at 1R profit")
+
+grp_atr    = "ATR Trailing Stop"
+atr_len    = input.int(14,   "ATR Period",         minval=1,  group=grp_atr)
+
+grp_time   = "Timeouts & Filters"
+order_timeout   = input.int(20, "Order Timeout (bars)", minval=0, group=grp_time,
+                  tooltip="0 = disabled. Cancel pending order after N bars")
+fractal_timeout = input.int(0,  "Fractal Search Timeout (bars)", minval=0, group=grp_time,
+                  tooltip="0 = disabled. Cancel setup if no fractal found in N bars")
+ema_dist_filter = input.float(0.0, "Max Fractal-EMA2 Distance (%)", minval=0, step=0.5, group=grp_time,
+                  tooltip="0 = disabled. Block fractal entry if too far from EMA2")
+entry_dist_filter = input.float(0.0, "Max Entry Distance Cancel (%)", minval=0, step=0.5, group=grp_time,
+                    tooltip="0 = disabled. Cancel pending order if entry price too far from current close")
+
+grp_vis    = "Visual Settings"
+show_emas      = input.bool(true,  "Show EMAs",        group=grp_vis)
+show_fractals  = input.bool(true,  "Show Fractals",    group=grp_vis)
+show_structure = input.bool(true,  "Show HH/HL/LL/LH", group=grp_vis)
+show_signals   = input.bool(true,  "Show Entry Signals", group=grp_vis)
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// INDICATORS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ema1 = ta.ema(close, ema1_len)
+ema2 = ta.ema(close, ema2_len)
+ema3 = ta.ema(close, ema3_len)
+ema4 = ta.ema(close, ema4_len)
+atr  = ta.atr(atr_len)
+
+// Plot EMAs
+plot(show_emas ? ema1 : na, "EMA1", color=color.new(color.blue, 20),   linewidth=1)
+plot(show_emas ? ema2 : na, "EMA2", color=color.new(color.orange, 20), linewidth=1)
+plot(show_emas ? ema3 : na, "EMA3", color=color.new(color.purple, 20), linewidth=2)
+plot(show_emas ? ema4 : na, "EMA4", color=color.new(color.red, 20),    linewidth=2)
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FRACTAL DETECTION (Williams Fractal, confirmed after fractal_n bars)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+isFractalHigh(n) =>
+    result = true
+    for i = 1 to n
+        if high[n] <= high[n - i] or high[n] <= high[n + i]
+            result := false
+            break
+    result
+
+isFractalLow(n) =>
+    result = true
+    for i = 1 to n
+        if low[n] >= low[n - i] or low[n] >= low[n + i]
+            result := false
+            break
+    result
+
+fh_detected = isFractalHigh(fractal_n)
+fl_detected = isFractalLow(fractal_n)
+
+fh_price = fh_detected ? high[fractal_n] : na
+fl_price = fl_detected ? low[fractal_n]  : na
+
+// Plot fractals
+plotshape(show_fractals and fh_detected, style=shape.triangledown, location=location.abovebar,
+          color=color.new(color.red, 30), size=size.tiny, offset=-fractal_n, title="Fractal High")
+plotshape(show_fractals and fl_detected, style=shape.triangleup, location=location.belowbar,
+          color=color.new(color.green, 30), size=size.tiny, offset=-fractal_n, title="Fractal Low")
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MARKET STRUCTURE (HH, HL, LH, LL)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var float prev_fh = na
+var float prev_fl = na
+var int   last_swing_high_type = 0  // 1=HH, -1=LH
+var int   last_swing_low_type  = 0  // 1=HL, -1=LL
+
+is_HH = false
+is_LH = false
+is_HL = false
+is_LL = false
+
+if fh_detected
+    if not na(prev_fh)
+        if fh_price > prev_fh
+            is_HH := true
+            last_swing_high_type := 1
+        else
+            is_LH := true
+            last_swing_high_type := -1
+    prev_fh := fh_price
+
+if fl_detected
+    if not na(prev_fl)
+        if fl_price < prev_fl
+            is_LL := true
+            last_swing_low_type := -1
+        else
+            is_HL := true
+            last_swing_low_type := 1
+    prev_fl := fl_price
+
+// Plot market structure labels
+if show_structure
+    if is_HH
+        label.new(bar_index - fractal_n, high[fractal_n], "HH", style=label.style_label_down,
+                  color=color.new(color.green, 60), textcolor=color.white, size=size.tiny)
+    if is_LH
+        label.new(bar_index - fractal_n, high[fractal_n], "LH", style=label.style_label_down,
+                  color=color.new(color.red, 60), textcolor=color.white, size=size.tiny)
+    if is_HL
+        label.new(bar_index - fractal_n, low[fractal_n], "HL", style=label.style_label_up,
+                  color=color.new(color.green, 60), textcolor=color.white, size=size.tiny)
+    if is_LL
+        label.new(bar_index - fractal_n, low[fractal_n], "LL", style=label.style_label_up,
+                  color=color.new(color.red, 60), textcolor=color.white, size=size.tiny)
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HTF TREND DETERMINATION
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+htf_bullish = last_swing_high_type == 1 and last_swing_low_type == 1
+htf_bearish = last_swing_high_type == -1 and last_swing_low_type == -1
+
+// Background color for trend
+bgcolor(htf_bullish ? color.new(color.green, 95) : htf_bearish ? color.new(color.red, 95) : na, title="Trend BG")
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// STRATEGY STATE MACHINE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var int   setup_dir        = 0     // 0=none, 1=long, -1=short
+var int   setup_bar        = 0
+var bool  has_pending       = false
+var int   pending_dir       = 0
+var float pending_entry     = 0.0
+var float pending_sl        = 0.0
+var int   pending_bar       = 0
+var float last_fh           = na
+var float last_fl           = na
+var float trail_sl          = na
+var float init_risk         = 0.0
+var bool  partial_done      = false
+var float entry_px          = 0.0
+var int   trade_dir         = 0
+
+// Track fractal prices for SL
+if fh_detected
+    last_fh := fh_price
+if fl_detected
+    last_fl := fl_price
+
+// ── Setup activation ──
+if strategy.position_size == 0 and not has_pending
+    if htf_bullish and setup_dir != 1
+        setup_dir := 1
+        setup_bar := bar_index
+    else if htf_bearish and setup_dir != -1
+        setup_dir := -1
+        setup_bar := bar_index
+    else if not htf_bullish and not htf_bearish
+        setup_dir := 0
+
+// ── Fractal search timeout ──
+if setup_dir != 0 and fractal_timeout > 0 and not has_pending
+    if bar_index - setup_bar > fractal_timeout
+        setup_dir := 0
+
+// ── Generate pending orders from fractals ──
+if setup_dir == 1 and fh_detected and strategy.position_size == 0 and not has_pending
+    if not na(last_fl)
+        // Distance filter
+        ok = true
+        if ema_dist_filter > 0
+            dist = math.abs(fh_price - ema2) / ema2 * 100
+            if dist > ema_dist_filter
+                ok := false
+        if ok
+            sl_px = sl_mode == "full" ? last_fl : fh_price - (fh_price - last_fl) / 2
+            if fh_price > sl_px
+                has_pending   := true
+                pending_dir   := 1
+                pending_entry := fh_price
+                pending_sl    := sl_px
+                pending_bar   := bar_index
+
+if setup_dir == -1 and fl_detected and strategy.position_size == 0 and not has_pending
+    if not na(last_fh)
+        ok = true
+        if ema_dist_filter > 0
+            dist = math.abs(fl_price - ema2) / ema2 * 100
+            if dist > ema_dist_filter
+                ok := false
+        if ok
+            sl_px = sl_mode == "full" ? last_fh : fl_price + (last_fh - fl_price) / 2
+            if fl_price < sl_px
+                has_pending   := true
+                pending_dir   := -1
+                pending_entry := fl_price
+                pending_sl    := sl_px
+                pending_bar   := bar_index
+
+// ── Cancel pending orders on conditions ──
+if has_pending
+    bars_active = bar_index - pending_bar
+    // HTF invalidation
+    cancelled = false
+    if pending_dir == 1 and not htf_bullish
+        cancelled := true
+    if pending_dir == -1 and not htf_bearish
+        cancelled := true
+    // Order timeout
+    if order_timeout > 0 and bars_active > order_timeout
+        cancelled := true
+    // Entry distance filter
+    if entry_dist_filter > 0
+        dist = math.abs(pending_entry - close) / close * 100
+        if dist > entry_dist_filter
+            cancelled := true
+    if cancelled
+        has_pending := false
+
+// ── Place / re-place stop orders ──
+if has_pending and strategy.position_size == 0
+    risk_dollars = strategy.equity * (risk_pct / 100.0)
+    sl_dist      = math.abs(pending_entry - pending_sl)
+    if sl_dist > 0
+        qty = risk_dollars / sl_dist
+        if pending_dir == 1
+            strategy.entry("Long", strategy.long, qty=qty, stop=pending_entry)
+        else
+            strategy.entry("Short", strategy.short, qty=qty, stop=pending_entry)
+
+// ── On position open: initialize trail ──
+if strategy.position_size != 0 and strategy.position_size[1] == 0
+    // Just entered
+    if has_pending
+        entry_px     := pending_entry
+        trade_dir    := pending_dir
+        init_risk    := math.abs(pending_entry - pending_sl)
+        trail_sl     := pending_sl
+        partial_done := false
+        has_pending  := false
+        setup_dir    := 0
+
+// ── Manage open position ──
+if strategy.position_size != 0
+    if trade_dir == 1
+        // ATR trailing stop (only ratchet up)
+        new_trail = close - atr
+        if new_trail > trail_sl
+            trail_sl := new_trail
+        // Partial TP at 1R
+        if not partial_done and partial_tp > 0
+            profit = close - entry_px
+            if profit >= init_risk
+                // Close partial
+                close_qty = math.abs(strategy.position_size) * partial_tp
+                strategy.close("Long", qty=close_qty, comment="Partial TP @1R")
+                partial_done := true
+                // Move trail to at least breakeven
+                if trail_sl < entry_px
+                    trail_sl := entry_px
+        // Set trailing SL via strategy.exit
+        strategy.exit("Trail SL", "Long", stop=trail_sl)
+
+    else if trade_dir == -1
+        new_trail = close + atr
+        if new_trail < trail_sl
+            trail_sl := new_trail
+        if not partial_done and partial_tp > 0
+            profit = entry_px - close
+            if profit >= init_risk
+                close_qty = math.abs(strategy.position_size) * partial_tp
+                strategy.close("Short", qty=close_qty, comment="Partial TP @1R")
+                partial_done := true
+                if trail_sl > entry_px
+                    trail_sl := entry_px
+        strategy.exit("Trail SL", "Short", stop=trail_sl)
+
+// ── Reset on position close ──
+if strategy.position_size == 0 and strategy.position_size[1] != 0
+    trade_dir    := 0
+    trail_sl     := na
+    init_risk    := 0.0
+    partial_done := false
+    entry_px     := 0.0
+    // Cancel any leftover orders
+    strategy.cancel_all()
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SIGNAL MARKERS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+plotshape(show_signals and has_pending and pending_dir == 1 and has_pending[1] == false,
+          style=shape.arrowup, location=location.belowbar, color=color.green,
+          size=size.normal, title="Long Signal")
+plotshape(show_signals and has_pending and pending_dir == -1 and has_pending[1] == false,
+          style=shape.arrowdown, location=location.abovebar, color=color.red,
+          size=size.normal, title="Short Signal")
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// INFO TABLE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+var table infoTable = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 80),
+                                border_width=1, border_color=color.gray)
+
+if barstate.islast
+    trend_str = htf_bullish ? "BULLISH ▲" : htf_bearish ? "BEARISH ▼" : "NEUTRAL ─"
+    trend_clr = htf_bullish ? color.green : htf_bearish ? color.red : color.gray
+
+    table.cell(infoTable, 0, 0, "EMA Fractal EA v5", text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 1, 0, "",                   text_color=color.white, text_size=size.small)
+    table.cell(infoTable, 0, 1, "Trend",              text_color=color.gray,  text_size=size.tiny)
+    table.cell(infoTable, 1, 1, trend_str,            text_color=trend_clr,   text_size=size.tiny)
+    table.cell(infoTable, 0, 2, "Setup",              text_color=color.gray,  text_size=size.tiny)
+    table.cell(infoTable, 1, 2, setup_dir == 1 ? "LONG" : setup_dir == -1 ? "SHORT" : "NONE",
+               text_color=setup_dir == 1 ? color.green : setup_dir == -1 ? color.red : color.gray, text_size=size.tiny)
+    table.cell(infoTable, 0, 3, "Pending",            text_color=color.gray,  text_size=size.tiny)
+    table.cell(infoTable, 1, 3, has_pending ? str.tostring(pending_entry, format.mintick) : "—",
+               text_color=color.yellow, text_size=size.tiny)
+    table.cell(infoTable, 0, 4, "Trail SL",           text_color=color.gray,  text_size=size.tiny)
+    table.cell(infoTable, 1, 4, not na(trail_sl) ? str.tostring(trail_sl, format.mintick) : "—",
+               text_color=color.orange, text_size=size.tiny)
+    table.cell(infoTable, 0, 5, "Risk %",             text_color=color.gray,  text_size=size.tiny)
+    table.cell(infoTable, 1, 5, str.tostring(risk_pct) + "%", text_color=color.white, text_size=size.tiny)
+    table.cell(infoTable, 0, 6, "SL Mode",            text_color=color.gray,  text_size=size.tiny)
+    table.cell(infoTable, 1, 6, sl_mode,              text_color=color.white, text_size=size.tiny)
+    table.cell(infoTable, 0, 7, "Last FH / FL",       text_color=color.gray,  text_size=size.tiny)
+    table.cell(infoTable, 1, 7, str.tostring(last_fh, format.mintick) + " / " + str.tostring(last_fl, format.mintick),
+               text_color=color.white, text_size=size.tiny)
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// DATA EXPORT (for validation against Python backtester)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+plot(ema1, "EMA1_export", display=display.data_window)
+plot(ema2, "EMA2_export", display=display.data_window)
+plot(ema3, "EMA3_export", display=display.data_window)
+plot(ema4, "EMA4_export", display=display.data_window)
+plot(fh_detected ? 1 : 0, "FractalHigh_export", display=display.data_window)
+plot(fl_detected ? 1 : 0, "FractalLow_export",  display=display.data_window)
+plot(is_HH ? 1 : 0, "HH_export", display=display.data_window)
+plot(is_LH ? 1 : 0, "LH_export", display=display.data_window)
+plot(is_LL ? 1 : 0, "LL_export", display=display.data_window)
+plot(is_HL ? 1 : 0, "HL_export", display=display.data_window)
+plot(atr, "ATR_export", display=display.data_window)

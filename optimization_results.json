@@ -1,0 +1,194 @@
+{
+  "Gold": {
+    "score": 5.0357908695155,
+    "params": {
+      "ema1_period": 5,
+      "ema2_period": 21,
+      "ema3_period": 50,
+      "ema4_period": 200,
+      "atr_period": 14,
+      "risk_pct": 3.0,
+      "sl_mode": "half",
+      "order_timeout": 20,
+      "partial_tp_frac": 0.5
+    },
+    "per_asset": {
+      "XAUUSD_1D": {
+        "total_trades": 167,
+        "winners": 72,
+        "losers": 95,
+        "win_rate": 43.11377245508982,
+        "net_pnl": 7408.433433727774,
+        "gross_profit": 27482.347357731225,
+        "gross_loss": 20073.91392400343,
+        "profit_factor": 1.369057746375466,
+        "max_drawdown_pct": 28.824507370130647,
+        "final_equity": 17408.433433727776,
+        "return_pct": 74.08433433727775,
+        "avg_win": 381.699268857378,
+        "avg_loss": -211.30435709477308,
+        "expectancy": 44.36187684866931
+      }
+    }
+  },
+  "Crypto": {
+    "score": 551.4604574312158,
+    "params": {
+      "ema1_period": 5,
+      "ema2_period": 21,
+      "ema3_period": 50,
+      "ema4_period": 200,
+      "atr_period": 14,
+      "risk_pct": 3.0,
+      "sl_mode": "half",
+      "order_timeout": 20,
+      "partial_tp_frac": 0.0
+    },
+    "per_asset": {
+      "BTCUSD_1D": {
+        "total_trades": 125,
+        "winners": 72,
+        "losers": 53,
+        "win_rate": 57.599999999999994,
+        "net_pnl": 138379.48075153076,
+        "gross_profit": 198873.90559741,
+        "gross_loss": 60494.42484587919,
+        "profit_factor": 3.287474938460499,
+        "max_drawdown_pct": 13.000976815073514,
+        "final_equity": 148379.48075153076,
+        "return_pct": 1383.7948075153076,
+        "avg_win": 2762.137577741805,
+        "avg_loss": -1141.404242375079,
+        "expectancy": 1107.0358460122463
+      }
+    }
+  },
+  "US_Tech_Stocks": {
+    "score": 61.62712814589253,
+    "params": {
+      "ema1_period": 5,
+      "ema2_period": 21,
+      "ema3_period": 50,
+      "ema4_period": 200,
+      "atr_period": 14,
+      "risk_pct": 3.0,
+      "sl_mode": "half",
+      "order_timeout": 20,
+      "partial_tp_frac": 0.0
+    },
+    "per_asset": {
+      "AAPL_1D": {
+        "total_trades": 250,
+        "winners": 117,
+        "losers": 133,
+        "win_rate": 46.800000000000004,
+        "net_pnl": 55985.16903100672,
+        "gross_profit": 117240.22537789772,
+        "gross_loss": 61255.056346891055,
+        "profit_factor": 1.9139681255692476,
+        "max_drawdown_pct": 18.07257189171629,
+        "final_equity": 65985.16903100672,
+        "return_pct": 559.8516903100672,
+        "avg_win": 1002.0532083581003,
+        "avg_loss": -460.56433343527107,
+        "expectancy": 223.94067612402677
+      },
+      "NVDA_1D": {
+        "total_trades": 160,
+        "winners": 73,
+        "losers": 87,
+        "win_rate": 45.625,
+        "net_pnl": 12257.95411777033,
+        "gross_profit": 32008.321942279912,
+        "gross_loss": 19750.367824509573,
+        "profit_factor": 1.6206443458009228,
+        "max_drawdown_pct": 17.805681264175625,
+        "final_equity": 22257.95411777033,
+        "return_pct": 122.57954117770329,
+        "avg_win": 438.4701635928754,
+        "avg_loss": -227.0157221207997,
+        "expectancy": 76.61221323606458
+      },
+      "TSLA_1D": {
+        "total_trades": 83,
+        "winners": 46,
+        "losers": 37,
+        "win_rate": 55.42168674698795,
+        "net_pnl": 24530.550212545048,
+        "gross_profit": 35949.589265352646,
+        "gross_loss": 11419.039052807597,
+        "profit_factor": 3.1482149328943514,
+        "max_drawdown_pct": 12.024350532097884,
+        "final_equity": 34530.550212545044,
+        "return_pct": 245.30550212545043,
+        "avg_win": 781.5128101163618,
+        "avg_loss": -308.622677102908,
+        "expectancy": 295.54879774150663
+      },
+      "AMD_1D": {
+        "total_trades": 284,
+        "winners": 140,
+        "losers": 144,
+        "win_rate": 49.29577464788733,
+        "net_pnl": 74811.10280647966,
+        "gross_profit": 182562.08919524372,
+        "gross_loss": 107750.98638876408,
+        "profit_factor": 1.6942962223711087,
+        "max_drawdown_pct": 19.82776067681036,
+        "final_equity": 84811.10280647966,
+        "return_pct": 748.1110280647965,
+        "avg_win": 1304.0149228231699,
+        "avg_loss": -748.2707388108618,
+        "expectancy": 263.41937607915366
+      },
+      "MSFT_1D": {
+        "total_trades": 222,
+        "winners": 98,
+        "losers": 124,
+        "win_rate": 44.14414414414414,
+        "net_pnl": 14493.580972431071,
+        "gross_profit": 71669.97441959883,
+        "gross_loss": 57176.39344716773,
+        "profit_factor": 1.253488898103087,
+        "max_drawdown_pct": 27.310989184335384,
+        "final_equity": 24493.58097243107,
+        "return_pct": 144.9358097243107,
+        "avg_win": 731.326269587743,
+        "avg_loss": -461.09994715457856,
+        "expectancy": 65.28640077671655
+      }
+    }
+  },
+  "Forex": {
+    "score": 0.9466014598921698,
+    "params": {
+      "ema1_period": 5,
+      "ema2_period": 21,
+      "ema3_period": 50,
+      "ema4_period": 200,
+      "atr_period": 14,
+      "risk_pct": 1.0,
+      "sl_mode": "full",
+      "order_timeout": 20,
+      "partial_tp_frac": 0.5
+    },
+    "per_asset": {
+      "EURJPY_1W": {
+        "total_trades": 24,
+        "winners": 10,
+        "losers": 14,
+        "win_rate": 41.66666666666667,
+        "net_pnl": 116.60675451413962,
+        "gross_profit": 510.1517766767986,
+        "gross_loss": 393.545022162659,
+        "profit_factor": 1.296298385057311,
+        "max_drawdown_pct": 2.262190599261829,
+        "final_equity": 10116.60675451414,
+        "return_pct": 1.1660675451413953,
+        "avg_win": 51.01517766767986,
+        "avg_loss": -28.110358725904213,
+        "expectancy": 4.858614771422483
+      }
+    }
+  }
+}
