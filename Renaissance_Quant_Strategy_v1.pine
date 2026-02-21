@@ -1,0 +1,651 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Robin – Renaissance Quantitative Hedge Fund Strategy v1.0
+//
+// ══════════════════════════════════════════════════════════════════════════════
+// RENAISSANCE QUANT STRATEGY – Adaptive Multi-Factor Systematic Trading
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Inspiriert von quantitativen Hedge-Fund-Methoden (Renaissance Technologies):
+//   1. Marktregime-Erkennung (Trend / Mean-Reversion / Volatil)
+//   2. Multi-Faktor Signalsystem (Momentum, Mean-Reversion, Trend, Volatilität)
+//   3. Adaptive Gewichtung der Faktoren je nach Regime
+//   4. Dynamische Positionsgrößenberechnung (Volatilitäts-adjustiert)
+//   5. Mehrstufiges Risikomanagement mit Circuit-Breaker
+//   6. Statistisch fundierte Ein-/Ausstiege
+//
+// Funktioniert auf: Aktien, Forex, Krypto, Rohstoffe – alle Zeitrahmen
+// ══════════════════════════════════════════════════════════════════════════════
+
+//@version=6
+strategy("Renaissance Quant Strategy v1.0",
+     overlay        = true,
+     pyramiding     = 0,
+     default_qty_type   = strategy.percent_of_equity,
+     default_qty_value  = 100,
+     initial_capital    = 10000,
+     commission_type    = strategy.commission.percent,
+     commission_value   = 0.04,
+     slippage       = 2,
+     calc_on_every_tick = false,
+     process_orders_on_close = false,
+     max_bars_back  = 5000)
+
+// ┌──────────────────────────────────────────────────────────────────────────┐
+// │                        EINGABE-PARAMETER                                │
+// └──────────────────────────────────────────────────────────────────────────┘
+
+// ── Regime-Erkennung ──
+grp_regime = "═══ Marktregime-Erkennung ═══"
+adx_len         = input.int(14,    "ADX Länge",              minval=5,  maxval=50,  group=grp_regime)
+adx_trend_th    = input.float(25,  "ADX Trend-Schwelle",     minval=10, maxval=50,  step=1,   group=grp_regime)
+adx_strong_th   = input.float(40,  "ADX Starker-Trend",      minval=25, maxval=60,  step=1,   group=grp_regime)
+hurst_len       = input.int(100,   "Hurst-Exponent Länge",   minval=50, maxval=300, group=grp_regime)
+vol_regime_len  = input.int(100,   "Volatilitäts-Regime Länge", minval=20, maxval=500, group=grp_regime)
+vol_high_pctl   = input.float(80,  "Hohe Volatilität Perzentil", minval=60, maxval=95, step=5, group=grp_regime)
+vol_low_pctl    = input.float(20,  "Niedrige Volatilität Perzentil", minval=5, maxval=40, step=5, group=grp_regime)
+
+// ── Faktor: Mean Reversion ──
+grp_mr = "═══ Mean Reversion Faktor ═══"
+zscore_len      = input.int(20,    "Z-Score Länge",          minval=10, maxval=100, group=grp_mr)
+zscore_entry    = input.float(2.0, "Z-Score Einstieg",       minval=1.0, maxval=4.0, step=0.1, group=grp_mr)
+zscore_exit     = input.float(0.5, "Z-Score Ausstieg",       minval=0.0, maxval=1.5, step=0.1, group=grp_mr)
+bb_len          = input.int(20,    "Bollinger-Band Länge",    minval=10, maxval=100, group=grp_mr)
+bb_mult         = input.float(2.0, "Bollinger-Band Multiplikator", minval=1.0, maxval=4.0, step=0.1, group=grp_mr)
+
+// ── Faktor: Momentum ──
+grp_mom = "═══ Momentum Faktor ═══"
+mom_fast        = input.int(10,    "Momentum Schnell",       minval=3,  maxval=30,  group=grp_mom)
+mom_slow        = input.int(30,    "Momentum Langsam",       minval=15, maxval=100, group=grp_mom)
+rsi_len         = input.int(14,    "RSI Länge",              minval=5,  maxval=30,  group=grp_mom)
+rsi_ob          = input.float(70,  "RSI Überkauft",          minval=60, maxval=90,  step=1, group=grp_mom)
+rsi_os          = input.float(30,  "RSI Überverkauft",       minval=10, maxval=40,  step=1, group=grp_mom)
+
+// ── Faktor: Trend ──
+grp_trend = "═══ Trend Faktor ═══"
+ema_fast        = input.int(8,     "EMA Schnell",            minval=3,  maxval=30,  group=grp_trend)
+ema_mid         = input.int(21,    "EMA Mittel",             minval=10, maxval=50,  group=grp_trend)
+ema_slow        = input.int(55,    "EMA Langsam",            minval=30, maxval=200, group=grp_trend)
+ema_base        = input.int(200,   "EMA Basis (Langfristig)",minval=100, maxval=500, group=grp_trend)
+
+// ── Faktor: Volatilität / Breakout ──
+grp_vol = "═══ Volatilitäts-Breakout Faktor ═══"
+atr_len         = input.int(14,    "ATR Länge",              minval=5,  maxval=50,  group=grp_vol)
+kc_len          = input.int(20,    "Keltner-Channel Länge",  minval=10, maxval=50,  group=grp_vol)
+kc_mult         = input.float(1.5, "Keltner Multiplikator",  minval=0.5, maxval=3.0, step=0.1, group=grp_vol)
+squeeze_bb_len  = input.int(20,    "Squeeze BB Länge",       minval=10, maxval=50,  group=grp_vol)
+squeeze_bb_mult = input.float(2.0, "Squeeze BB Mult",        minval=1.0, maxval=4.0, step=0.1, group=grp_vol)
+squeeze_kc_mult = input.float(1.5, "Squeeze KC Mult",        minval=0.5, maxval=3.0, step=0.1, group=grp_vol)
+
+// ── Volumen-Filter ──
+grp_volf = "═══ Volumen-Filter ═══"
+vol_filter_on   = input.bool(true, "Volumen-Filter aktivieren", group=grp_volf)
+vol_ma_len      = input.int(20,    "Volumen-MA Länge",       minval=5,  maxval=100, group=grp_volf)
+vol_threshold   = input.float(1.0, "Volumen-Schwelle (x Durchschnitt)", minval=0.5, maxval=3.0, step=0.1, group=grp_volf)
+
+// ── Risikomanagement ──
+grp_risk = "═══ Risikomanagement ═══"
+risk_pct        = input.float(1.5, "Risiko pro Trade (%)",   minval=0.1, maxval=5.0, step=0.1, group=grp_risk)
+atr_sl_mult     = input.float(2.0, "ATR Stop-Loss Multiplikator", minval=0.5, maxval=5.0, step=0.1, group=grp_risk)
+atr_tp_mult     = input.float(3.0, "ATR Take-Profit Multiplikator", minval=1.0, maxval=10.0, step=0.1, group=grp_risk)
+use_trailing     = input.bool(true, "Trailing-Stop verwenden", group=grp_risk)
+trail_atr_mult  = input.float(2.5, "Trailing ATR Multiplikator", minval=1.0, maxval=5.0, step=0.1, group=grp_risk)
+max_dd_pct      = input.float(15,  "Max Drawdown Circuit-Breaker (%)", minval=5, maxval=50, step=1, group=grp_risk)
+cooldown_bars   = input.int(5,     "Cooldown nach Verlust (Bars)", minval=0, maxval=50, group=grp_risk)
+
+// ── Faktor-Gewichtung (Basis – wird adaptiv angepasst) ──
+grp_weights = "═══ Faktor-Gewichtung (Basis) ═══"
+w_mr_base       = input.float(25,  "Mean-Reversion Gewicht (%)", minval=0, maxval=100, step=5, group=grp_weights)
+w_mom_base      = input.float(25,  "Momentum Gewicht (%)",       minval=0, maxval=100, step=5, group=grp_weights)
+w_trend_base    = input.float(30,  "Trend Gewicht (%)",          minval=0, maxval=100, step=5, group=grp_weights)
+w_vol_base      = input.float(20,  "Volatilitäts-Breakout Gewicht (%)", minval=0, maxval=100, step=5, group=grp_weights)
+
+// ── Multi-Timeframe ──
+grp_mtf = "═══ Multi-Timeframe ═══"
+use_mtf         = input.bool(true, "MTF-Bestätigung verwenden", group=grp_mtf)
+htf_period      = input.timeframe("D", "Höherer Zeitrahmen", group=grp_mtf)
+
+// ── Dashboard ──
+grp_dash = "═══ Dashboard ═══"
+show_dashboard  = input.bool(true, "Dashboard anzeigen",     group=grp_dash)
+show_signals    = input.bool(true, "Signal-Pfeile anzeigen", group=grp_dash)
+show_zones      = input.bool(true, "SL/TP Zonen anzeigen",   group=grp_dash)
+
+// ┌──────────────────────────────────────────────────────────────────────────┐
+// │                    KERN-BERECHNUNGEN                                     │
+// └──────────────────────────────────────────────────────────────────────────┘
+
+// ── ATR für Risiko-Berechnungen ──
+atr_val = ta.atr(atr_len)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 1: MARKTREGIME-ERKENNUNG
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── ADX-Berechnung (Trendstärke) ──
+[di_plus, di_minus, adx_val] = ta.dmi(adx_len, adx_len)
+
+// ── Hurst-Exponent Approximation ──
+// H > 0.5 = Trending, H < 0.5 = Mean-Reverting, H ≈ 0.5 = Random Walk
+hurst_calc(src, length) =>
+    half = math.floor(length / 2)
+    // Varianz über volle Periode vs halbe Periode
+    full_var = ta.variance(src, length)
+    half_var = ta.variance(src, half)
+    // Rescaled Range Ratio Approximation
+    ratio = full_var > 0 and half_var > 0 ? math.log(full_var / half_var) / math.log(2.0) : 0.5
+    hurst = ratio / 2.0
+    math.max(0.0, math.min(1.0, hurst))
+
+hurst_val = hurst_calc(close, hurst_len)
+
+// ── Volatilitäts-Regime ──
+atr_normalized = atr_val / close * 100  // ATR als % des Preises
+vol_percentile_high = ta.percentile_linear_interpolation(atr_normalized, vol_regime_len, vol_high_pctl)
+vol_percentile_low  = ta.percentile_linear_interpolation(atr_normalized, vol_regime_len, vol_low_pctl)
+
+is_high_vol = atr_normalized > vol_percentile_high
+is_low_vol  = atr_normalized < vol_percentile_low
+is_normal_vol = not is_high_vol and not is_low_vol
+
+// ── Regime-Klassifizierung ──
+// 1 = Strong Trend, 2 = Mild Trend, 3 = Mean Reversion, 4 = High Volatility, 5 = Low Vol Squeeze
+var int regime = 3
+if is_high_vol and adx_val > adx_strong_th
+    regime := 1  // Starker Trend mit hoher Volatilität
+else if adx_val > adx_trend_th
+    regime := 2  // Moderater Trend
+else if hurst_val < 0.45 and not is_high_vol
+    regime := 3  // Mean Reversion
+else if is_high_vol
+    regime := 4  // Hohe Volatilität (chaotisch)
+else if is_low_vol
+    regime := 5  // Squeeze (niedrige Volatilität vor Ausbruch)
+else
+    regime := 3  // Default: Mean Reversion
+
+// ── Regime-Labels ──
+regime_str = switch regime
+    1 => "STARKER TREND"
+    2 => "TREND"
+    3 => "MEAN REVERSION"
+    4 => "HOHE VOLATILITÄT"
+    5 => "SQUEEZE"
+    => "UNBEKANNT"
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 2: ADAPTIVE FAKTOR-GEWICHTUNG
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Gewichte werden basierend auf dem Regime dynamisch angepasst
+var float w_mr    = w_mr_base
+var float w_mom   = w_mom_base
+var float w_trend = w_trend_base
+var float w_vol   = w_vol_base
+
+switch regime
+    1 =>  // Starker Trend → Trend & Momentum stark, MR aus
+        w_trend := 45
+        w_mom   := 35
+        w_mr    := 5
+        w_vol   := 15
+    2 =>  // Moderater Trend → Trend dominant
+        w_trend := 35
+        w_mom   := 30
+        w_mr    := 15
+        w_vol   := 20
+    3 =>  // Mean Reversion → MR dominant
+        w_trend := 10
+        w_mom   := 15
+        w_mr    := 55
+        w_vol   := 20
+    4 =>  // Hohe Volatilität → Vorsicht, breite Stops
+        w_trend := 20
+        w_mom   := 20
+        w_mr    := 30
+        w_vol   := 30
+    5 =>  // Squeeze → Breakout-Fokus
+        w_trend := 20
+        w_mom   := 15
+        w_mr    := 15
+        w_vol   := 50
+
+// Normalisierung auf 100%
+w_total = w_mr + w_mom + w_trend + w_vol
+w_mr_n    = w_mr / w_total
+w_mom_n   = w_mom / w_total
+w_trend_n = w_trend / w_total
+w_vol_n   = w_vol / w_total
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 3: FAKTOR-BERECHNUNGEN
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── 3a. Mean Reversion Faktor ──
+zscore_mean = ta.sma(close, zscore_len)
+zscore_std  = ta.stdev(close, zscore_len)
+zscore      = zscore_std != 0 ? (close - zscore_mean) / zscore_std : 0
+
+[bb_mid, bb_up, bb_lo] = ta.bb(close, bb_len, bb_mult)
+bb_pct = (bb_up - bb_lo) != 0 ? (close - bb_lo) / (bb_up - bb_lo) : 0.5
+
+// Mean-Reversion Score: -100 (extrem überverkauft) bis +100 (extrem überkauft)
+mr_zscore_signal = -zscore / zscore_entry * 100  // Umgekehrt: negativer Z-Score = Kaufsignal
+mr_bb_signal     = -(bb_pct - 0.5) * 200         // BB %B umgekehrt
+mr_score = math.avg(mr_zscore_signal, mr_bb_signal)
+mr_score_clamped = math.max(-100, math.min(100, mr_score))
+
+// ── 3b. Momentum Faktor ──
+roc_fast = ta.roc(close, mom_fast)
+roc_slow = ta.roc(close, mom_slow)
+rsi_val  = ta.rsi(close, rsi_len)
+
+// Momentum Score: -100 bis +100
+mom_roc_signal = roc_fast > 0 and roc_slow > 0 ? math.min(100, (roc_fast + roc_slow) * 5) :
+                 roc_fast < 0 and roc_slow < 0 ? math.max(-100, (roc_fast + roc_slow) * 5) :
+                 (roc_fast + roc_slow) * 3
+mom_rsi_signal = (rsi_val - 50) * 2  // RSI normalisiert: -100 bis +100
+mom_score = math.avg(mom_roc_signal, mom_rsi_signal)
+mom_score_clamped = math.max(-100, math.min(100, mom_score))
+
+// ── 3c. Trend Faktor ──
+ema_f = ta.ema(close, ema_fast)
+ema_m = ta.ema(close, ema_mid)
+ema_s = ta.ema(close, ema_slow)
+ema_b = ta.ema(close, ema_base)
+
+// EMA-Ordnung analysieren
+ema_bullish_order = ema_f > ema_m and ema_m > ema_s and ema_s > ema_b ? 1.0 :
+                    ema_f > ema_m and ema_m > ema_s ? 0.66 :
+                    ema_f > ema_m ? 0.33 : 0.0
+ema_bearish_order = ema_f < ema_m and ema_m < ema_s and ema_s < ema_b ? 1.0 :
+                    ema_f < ema_m and ema_m < ema_s ? 0.66 :
+                    ema_f < ema_m ? 0.33 : 0.0
+
+// Preis-Position relativ zu EMAs
+price_vs_ema = (close > ema_f ? 1 : 0) + (close > ema_m ? 1 : 0) +
+               (close > ema_s ? 1 : 0) + (close > ema_b ? 1 : 0)
+
+// Trend Score: -100 bis +100
+trend_order_signal = (ema_bullish_order - ema_bearish_order) * 100
+trend_price_signal = (price_vs_ema - 2) * 50  // 0-4 → -100 bis +100
+trend_adx_weight   = math.min(adx_val / 50, 1.0)  // ADX als Konfidenz
+
+trend_score = math.avg(trend_order_signal, trend_price_signal) * trend_adx_weight
+trend_score_clamped = math.max(-100, math.min(100, trend_score))
+
+// ── 3d. Volatilitäts-Breakout Faktor ──
+// Squeeze Momentum (Bollinger innerhalb Keltner = Squeeze)
+squeeze_bb_upper = ta.sma(close, squeeze_bb_len) + ta.stdev(close, squeeze_bb_len) * squeeze_bb_mult
+squeeze_bb_lower = ta.sma(close, squeeze_bb_len) - ta.stdev(close, squeeze_bb_len) * squeeze_bb_mult
+kc_basis = ta.ema(close, kc_len)
+kc_upper = kc_basis + atr_val * squeeze_kc_mult
+kc_lower = kc_basis - atr_val * squeeze_kc_mult
+
+is_squeeze    = squeeze_bb_lower > kc_lower and squeeze_bb_upper < kc_upper
+squeeze_fired = is_squeeze[1] and not is_squeeze  // Squeeze gerade beendet
+
+// Linear Regression Momentum für Richtung nach Squeeze
+linreg_val = ta.linreg(close - math.avg(math.avg(ta.highest(high, kc_len), ta.lowest(low, kc_len)), kc_basis), kc_len, 0)
+
+// Breakout Score: -100 bis +100
+vol_squeeze_signal = squeeze_fired ? (linreg_val > 0 ? 80 : -80) :
+                     is_squeeze ? (linreg_val > 0 ? 40 : -40) : 0
+vol_breakout_signal = close > kc_upper ? 60 : close < kc_lower ? -60 : 0
+vol_score = math.avg(vol_squeeze_signal, vol_breakout_signal)
+vol_score_clamped = math.max(-100, math.min(100, vol_score))
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 4: COMPOSITE SIGNAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Gewichteter Composite-Score
+composite = mr_score_clamped * w_mr_n +
+            mom_score_clamped * w_mom_n +
+            trend_score_clamped * w_trend_n +
+            vol_score_clamped * w_vol_n
+
+// Smoothing um Noise zu reduzieren
+composite_smooth = ta.ema(composite, 3)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 5: VOLUMEN-BESTÄTIGUNG
+// ══════════════════════════════════════════════════════════════════════════════
+
+vol_ma = ta.sma(volume, vol_ma_len)
+vol_confirmed = not vol_filter_on or volume > vol_ma * vol_threshold or na(volume) or volume == 0
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 6: MULTI-TIMEFRAME BESTÄTIGUNG
+// ══════════════════════════════════════════════════════════════════════════════
+
+htf_ema_f = request.security(syminfo.tickerid, htf_period, ta.ema(close, ema_fast))
+htf_ema_s = request.security(syminfo.tickerid, htf_period, ta.ema(close, ema_slow))
+htf_rsi   = request.security(syminfo.tickerid, htf_period, ta.rsi(close, rsi_len))
+
+htf_bullish = htf_ema_f > htf_ema_s and htf_rsi > 40
+htf_bearish = htf_ema_f < htf_ema_s and htf_rsi < 60
+
+mtf_long_ok  = not use_mtf or htf_bullish
+mtf_short_ok = not use_mtf or htf_bearish
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 7: RISIKOMANAGEMENT
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Circuit Breaker: Maximaler Drawdown ──
+equity_high   = ta.highest(strategy.equity, 500)
+current_dd    = (equity_high - strategy.equity) / equity_high * 100
+circuit_break = current_dd > max_dd_pct
+
+// ── Cooldown nach Verlust ──
+var int bars_since_loss = 999
+if strategy.closedtrades > 0
+    last_trade_profit = strategy.closedtrades.profit(strategy.closedtrades - 1)
+    if last_trade_profit < 0 and last_trade_profit[1] >= 0
+        bars_since_loss := 0
+bars_since_loss := bars_since_loss + 1
+cooldown_active = bars_since_loss < cooldown_bars
+
+// ── Volatilitäts-angepasste Positionsgröße ──
+// Regime-basierter Risikofaktor
+regime_risk_factor = switch regime
+    1 => 1.0    // Starker Trend → Volle Größe
+    2 => 1.0    // Trend → Volle Größe
+    3 => 0.8    // Mean Reversion → Etwas reduziert
+    4 => 0.5    // Hohe Vol → Halbiert
+    5 => 0.7    // Squeeze → Reduziert bis Ausbruch bestätigt
+    => 0.8
+
+// Signal-Stärke Faktor
+signal_strength = math.abs(composite_smooth) / 100
+signal_risk_factor = 0.5 + signal_strength * 0.5  // 50%-100% je nach Signalstärke
+
+// Effektives Risiko
+effective_risk = risk_pct * regime_risk_factor * signal_risk_factor
+
+// ATR-basierte Stop-Distanz (adaptiv nach Regime)
+sl_atr_mult_adaptive = switch regime
+    1 => atr_sl_mult * 1.2   // Breitere Stops im Trend
+    2 => atr_sl_mult
+    3 => atr_sl_mult * 0.8   // Engere Stops bei MR
+    4 => atr_sl_mult * 1.5   // Breiteste Stops bei hoher Vol
+    5 => atr_sl_mult * 0.9
+    => atr_sl_mult
+
+sl_distance = atr_val * sl_atr_mult_adaptive
+
+// Positionsgröße berechnung
+risk_amount = strategy.equity * (effective_risk / 100)
+position_size_raw = sl_distance > 0 ? risk_amount / sl_distance : 0
+position_size = math.max(0, position_size_raw)
+
+// TP Distanz (adaptives Risk:Reward je nach Regime)
+tp_rr_ratio = switch regime
+    1 => atr_tp_mult * 1.5   // Besseres RR im Trend
+    2 => atr_tp_mult * 1.2
+    3 => atr_tp_mult * 0.8   // Kürzere TP bei MR
+    4 => atr_tp_mult
+    5 => atr_tp_mult * 1.3   // Gutes RR nach Squeeze
+    => atr_tp_mult
+
+tp_distance = atr_val * tp_rr_ratio
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 8: ENTRY / EXIT SIGNALE
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Signal-Schwellen (adaptiv nach Regime) ──
+entry_threshold = switch regime
+    1 => 25    // Niedrigere Schwelle im Trend (leichter einsteigen)
+    2 => 30
+    3 => 35    // Höhere Schwelle bei MR (mehr Bestätigung nötig)
+    4 => 45    // Hohe Schwelle bei Vol (sehr selektiv)
+    5 => 30    // Moderate Schwelle bei Squeeze
+    => 35
+
+exit_threshold = 5  // Nahe Null = Signal verblasst
+
+// ── Long-Bedingungen ──
+long_signal  = composite_smooth > entry_threshold
+long_confirm = vol_confirmed and mtf_long_ok
+long_entry   = long_signal and long_confirm and not circuit_break and not cooldown_active
+long_exit    = composite_smooth < exit_threshold and composite_smooth < composite_smooth[1]
+
+// ── Short-Bedingungen ──
+short_signal  = composite_smooth < -entry_threshold
+short_confirm = vol_confirmed and mtf_short_ok
+short_entry   = short_signal and short_confirm and not circuit_break and not cooldown_active
+short_exit    = composite_smooth > -exit_threshold and composite_smooth > composite_smooth[1]
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 9: ORDER-AUSFÜHRUNG
+// ══════════════════════════════════════════════════════════════════════════════
+
+var float entry_price = na
+var float stop_price  = na
+var float tp_price    = na
+var float trail_price = na
+
+// ── Long Entry ──
+if long_entry and strategy.position_size == 0
+    entry_price := close
+    stop_price  := close - sl_distance
+    tp_price    := close + tp_distance
+    trail_price := close - atr_val * trail_atr_mult
+
+    strategy.entry("Long", strategy.long, qty=position_size)
+    strategy.exit("Long TP/SL", "Long",
+                  stop=stop_price,
+                  limit=tp_price)
+
+// ── Short Entry ──
+if short_entry and strategy.position_size == 0
+    entry_price := close
+    stop_price  := close + sl_distance
+    tp_price    := close - tp_distance
+    trail_price := close + atr_val * trail_atr_mult
+
+    strategy.entry("Short", strategy.short, qty=position_size)
+    strategy.exit("Short TP/SL", "Short",
+                  stop=stop_price,
+                  limit=tp_price)
+
+// ── Trailing Stop Update ──
+if use_trailing and strategy.position_size > 0
+    new_trail = close - atr_val * trail_atr_mult
+    if new_trail > trail_price
+        trail_price := new_trail
+        if trail_price > stop_price
+            strategy.exit("Long TP/SL", "Long", stop=trail_price, limit=tp_price)
+
+if use_trailing and strategy.position_size < 0
+    new_trail = close + atr_val * trail_atr_mult
+    if new_trail < trail_price
+        trail_price := new_trail
+        if trail_price < stop_price
+            strategy.exit("Short TP/SL", "Short", stop=trail_price, limit=tp_price)
+
+// ── Signal-basierter Exit ──
+if long_exit and strategy.position_size > 0
+    strategy.close("Long", comment="Signal Exit")
+
+if short_exit and strategy.position_size < 0
+    strategy.close("Short", comment="Signal Exit")
+
+// ── Circuit Breaker Exit ──
+if circuit_break and strategy.position_size != 0
+    strategy.close_all(comment="⚠ CIRCUIT BREAKER")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 10: VISUALISIERUNG
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── EMA-Bänder ──
+p_ema_f = plot(ema_f, "EMA Schnell",   color=color.new(color.blue, 60),   linewidth=1)
+p_ema_m = plot(ema_m, "EMA Mittel",    color=color.new(color.orange, 60), linewidth=1)
+p_ema_s = plot(ema_s, "EMA Langsam",   color=color.new(color.red, 60),    linewidth=1)
+p_ema_b = plot(ema_b, "EMA Basis",     color=color.new(color.gray, 60),   linewidth=2)
+
+// EMA-Ribbon
+fill(p_ema_f, p_ema_m, color=ema_f > ema_m ? color.new(color.green, 90) : color.new(color.red, 90))
+fill(p_ema_m, p_ema_s, color=ema_m > ema_s ? color.new(color.green, 93) : color.new(color.red, 93))
+
+// ── Bollinger-Bänder (dezent) ──
+plot(bb_up,  "BB Oben",  color=color.new(color.purple, 80), linewidth=1, style=plot.style_circles)
+plot(bb_lo,  "BB Unten", color=color.new(color.purple, 80), linewidth=1, style=plot.style_circles)
+
+// ── Regime Hintergrund ──
+regime_color = switch regime
+    1 => color.new(color.green, 92)
+    2 => color.new(color.lime, 94)
+    3 => color.new(color.blue, 94)
+    4 => color.new(color.red, 92)
+    5 => color.new(color.yellow, 93)
+    => color.new(color.gray, 95)
+bgcolor(regime_color, title="Regime-Hintergrund")
+
+// ── Signal-Pfeile ──
+plotshape(show_signals and long_entry  and strategy.position_size[1] == 0 ? low  : na,
+          title="Long Entry",  style=shape.triangleup,   location=location.belowbar,
+          color=color.green,   size=size.normal, text="LONG")
+plotshape(show_signals and short_entry and strategy.position_size[1] == 0 ? high : na,
+          title="Short Entry", style=shape.triangledown, location=location.abovebar,
+          color=color.red,     size=size.normal, text="SHORT")
+
+// ── SL/TP Linien ──
+plot(show_zones and strategy.position_size > 0 ? stop_price : na,
+     "Long SL", color=color.red, linewidth=1, style=plot.style_linebr)
+plot(show_zones and strategy.position_size > 0 ? tp_price : na,
+     "Long TP", color=color.green, linewidth=1, style=plot.style_linebr)
+plot(show_zones and strategy.position_size < 0 ? stop_price : na,
+     "Short SL", color=color.red, linewidth=1, style=plot.style_linebr)
+plot(show_zones and strategy.position_size < 0 ? tp_price : na,
+     "Short TP", color=color.green, linewidth=1, style=plot.style_linebr)
+plot(show_zones and use_trailing and strategy.position_size != 0 ? trail_price : na,
+     "Trailing Stop", color=color.orange, linewidth=1, style=plot.style_linebr)
+
+// ── Circuit Breaker Warnung ──
+bgcolor(circuit_break ? color.new(color.red, 80) : na, title="Circuit Breaker")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 11: DASHBOARD (Tabelle)
+// ══════════════════════════════════════════════════════════════════════════════
+
+if show_dashboard and barstate.islast
+    var table dash = table.new(position.top_right, 2, 16,
+                               bgcolor=color.new(color.black, 20),
+                               border_width=1,
+                               border_color=color.new(color.gray, 50),
+                               frame_width=2,
+                               frame_color=color.new(color.white, 70))
+
+    // Header
+    table.cell(dash, 0, 0, "RENAISSANCE QUANT", bgcolor=color.new(color.blue, 30),
+               text_color=color.white, text_size=size.normal)
+    table.cell(dash, 1, 0, "v1.0", bgcolor=color.new(color.blue, 30),
+               text_color=color.white, text_size=size.normal)
+
+    // Regime
+    regime_bg = switch regime
+        1 => color.new(color.green, 30)
+        2 => color.new(color.lime, 40)
+        3 => color.new(color.blue, 40)
+        4 => color.new(color.red, 30)
+        5 => color.new(color.yellow, 40)
+        => color.new(color.gray, 40)
+    table.cell(dash, 0, 1, "Regime", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 1, regime_str, bgcolor=regime_bg, text_color=color.white, text_size=size.small)
+
+    // Hurst
+    hurst_bg = hurst_val > 0.55 ? color.new(color.green, 40) :
+               hurst_val < 0.45 ? color.new(color.blue, 40) : color.new(color.gray, 40)
+    table.cell(dash, 0, 2, "Hurst", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 2, str.tostring(hurst_val, "#.###"), bgcolor=hurst_bg, text_color=color.white, text_size=size.small)
+
+    // ADX
+    adx_bg = adx_val > adx_strong_th ? color.new(color.green, 30) :
+             adx_val > adx_trend_th ? color.new(color.lime, 40) : color.new(color.gray, 50)
+    table.cell(dash, 0, 3, "ADX", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 3, str.tostring(adx_val, "#.#"), bgcolor=adx_bg, text_color=color.white, text_size=size.small)
+
+    // Faktor-Scores
+    table.cell(dash, 0, 4, "── Faktoren ──", text_color=color.yellow, text_size=size.small)
+    table.cell(dash, 1, 4, "Score / Gewicht", text_color=color.yellow, text_size=size.small)
+
+    score_bg(score) => score > 30 ? color.new(color.green, 40) : score < -30 ? color.new(color.red, 40) : color.new(color.gray, 50)
+
+    table.cell(dash, 0, 5, "Mean Rev.", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 5, str.tostring(mr_score_clamped, "#.#") + " (" + str.tostring(w_mr_n*100, "#") + "%)",
+               bgcolor=score_bg(mr_score_clamped), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 6, "Momentum", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 6, str.tostring(mom_score_clamped, "#.#") + " (" + str.tostring(w_mom_n*100, "#") + "%)",
+               bgcolor=score_bg(mom_score_clamped), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 7, "Trend", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 7, str.tostring(trend_score_clamped, "#.#") + " (" + str.tostring(w_trend_n*100, "#") + "%)",
+               bgcolor=score_bg(trend_score_clamped), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 8, "Volatilität", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 8, str.tostring(vol_score_clamped, "#.#") + " (" + str.tostring(w_vol_n*100, "#") + "%)",
+               bgcolor=score_bg(vol_score_clamped), text_color=color.white, text_size=size.small)
+
+    // Composite
+    comp_bg = composite_smooth > entry_threshold ? color.new(color.green, 20) :
+              composite_smooth < -entry_threshold ? color.new(color.red, 20) : color.new(color.gray, 40)
+    table.cell(dash, 0, 9, "COMPOSITE", text_color=color.white, text_size=size.normal)
+    table.cell(dash, 1, 9, str.tostring(composite_smooth, "#.#"), bgcolor=comp_bg,
+               text_color=color.white, text_size=size.normal)
+
+    // Risiko
+    table.cell(dash, 0, 10, "── Risiko ──", text_color=color.yellow, text_size=size.small)
+    table.cell(dash, 1, 10, "", text_color=color.yellow, text_size=size.small)
+
+    table.cell(dash, 0, 11, "Eff. Risiko %", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 11, str.tostring(effective_risk, "#.##") + "%", text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 12, "Position", text_color=color.white, text_size=size.small)
+    pos_str = strategy.position_size > 0 ? "LONG " + str.tostring(strategy.position_size, "#.##") :
+              strategy.position_size < 0 ? "SHORT " + str.tostring(math.abs(strategy.position_size), "#.##") : "FLAT"
+    pos_bg = strategy.position_size > 0 ? color.new(color.green, 40) :
+             strategy.position_size < 0 ? color.new(color.red, 40) : color.new(color.gray, 50)
+    table.cell(dash, 1, 12, pos_str, bgcolor=pos_bg, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 13, "Drawdown", text_color=color.white, text_size=size.small)
+    dd_bg = current_dd > max_dd_pct * 0.7 ? color.new(color.red, 30) :
+            current_dd > max_dd_pct * 0.4 ? color.new(color.orange, 40) : color.new(color.green, 50)
+    table.cell(dash, 1, 13, str.tostring(current_dd, "#.#") + "%", bgcolor=dd_bg, text_color=color.white, text_size=size.small)
+
+    // Squeeze Status
+    table.cell(dash, 0, 14, "Squeeze", text_color=color.white, text_size=size.small)
+    sq_bg = is_squeeze ? color.new(color.orange, 30) : color.new(color.gray, 60)
+    table.cell(dash, 1, 14, is_squeeze ? "AKTIV" : "–", bgcolor=sq_bg, text_color=color.white, text_size=size.small)
+
+    // Circuit Breaker
+    table.cell(dash, 0, 15, "Circuit Break", text_color=color.white, text_size=size.small)
+    cb_bg = circuit_break ? color.new(color.red, 10) : color.new(color.green, 60)
+    table.cell(dash, 1, 15, circuit_break ? "⚠ AKTIV" : "OK", bgcolor=cb_bg, text_color=color.white, text_size=size.small)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODUL 12: ALERTS
+// ══════════════════════════════════════════════════════════════════════════════
+
+alertcondition(long_entry and strategy.position_size[1] == 0,
+               title="Long Entry",
+               message="Renaissance Quant: LONG Entry | Regime: {{plot_0}} | Composite: {{plot_1}}")
+
+alertcondition(short_entry and strategy.position_size[1] == 0,
+               title="Short Entry",
+               message="Renaissance Quant: SHORT Entry | Regime: {{plot_0}} | Composite: {{plot_1}}")
+
+alertcondition(circuit_break,
+               title="Circuit Breaker",
+               message="⚠ Renaissance Quant: CIRCUIT BREAKER aktiv – Max Drawdown erreicht!")
+
+alertcondition(squeeze_fired,
+               title="Squeeze Fired",
+               message="Renaissance Quant: SQUEEZE ausgelöst – Breakout erwartet!")
+
+alertcondition(regime != regime[1],
+               title="Regime Change",
+               message="Renaissance Quant: Regime-Wechsel erkannt!")
