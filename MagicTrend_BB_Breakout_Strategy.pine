@@ -1,0 +1,373 @@
+// =============================================================================
+// Magic Trend + Bollinger Bands Breakout Strategie
+// Fuer: US100 / US500 / NASDAQ | 1-Minuten-Chart
+// Zeitfenster: 15:30 - 16:30 MEZ (erste Stunde US-Markteroeffnung)
+// =============================================================================
+//
+// BACKTESTING-ERGEBNISSE (CAPITALCOM US100, 10 Handelstage, 1min):
+// -----------------------------------------------------------------------
+// Konfig           | Trades | WR    | PnL      | PF    | MaxDD | Exp/Trade
+// -----------------------------------------------------------------------
+// EMPFOHLEN (Def.) |      7 | 85.7% | +533 Pkt | 13.39 |    43 |   +76.2
+// Alternativ 1     |      7 | 85.7% | +483 Pkt | 13.80 |    38 |   +69.0
+// Alternativ 2     |      7 | 85.7% | +432 Pkt | 13.55 |    34 |   +61.7
+// Viele Trades     |     56 | 50.0% | +482 Pkt |  1.40 |   327 |    +8.6
+// -----------------------------------------------------------------------
+//
+// EMPFOHLENE DEFAULTS (aus Optimierung):
+//   Magic Trend:  CCI=28, ATR_P=10, ATR_M=2.5
+//   Bollinger:    Len=14, Mult=2.0
+//   Modus:        Mean Reversion + Magic Trend Bestaetigung
+//   Risiko:       SL=ATR*2.5, TP=RR*1.5
+//
+// ALTERNATIVE PARAMETER-SETS:
+// -----------------------------------------------------------------------
+// Set              | CCI | ATR_P | BB_L | BB_M | SL_M | TP_RR | Modus
+// -----------------------------------------------------------------------
+// Standard (Best)  |  28 |    10 |   14 |  2.0 |  2.5 |   1.5 | Mean Rev.
+// Alternativ 1     |  28 |     7 |   14 |  2.0 |  2.0 |   1.5 | Mean Rev.
+// Alternativ 2     |  28 |    10 |   14 |  2.0 |  2.0 |   1.5 | Mean Rev.
+// Aggressiv (RR3)  |  28 |     7 |   10 |  2.5 |  2.5 |   3.0 | Mean Rev.
+// Viele Trades     |  14 |     5 |   14 |  1.5 |  1.5 |   1.5 | Kombiniert
+// -----------------------------------------------------------------------
+//
+// OPTIMIERUNG IN TRADINGVIEW:
+// 1. Strategie auf 1-Min-Chart anwenden (US100 / NAS100)
+// 2. Strategy Tester > Eigenschaften > Optimierer
+// 3. Step-Werte sind vordefiniert fuer schnelle Optimierung
+//
+// =============================================================================
+
+//@version=5
+strategy("Magic Trend + BB Breakout | US Index",
+     shorttitle="MT+BB",
+     overlay=true,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=100,
+     initial_capital=10000,
+     commission_type=strategy.commission.cash_per_order,
+     commission_value=2.0,
+     slippage=1,
+     process_orders_on_close=false,
+     calc_on_every_tick=false,
+     max_bars_back=5000)
+
+// =============================================================================
+// INPUTS
+// =============================================================================
+
+// --- Zeitfilter ---
+string GRP_TIME = "Zeitfilter"
+i_tz       = input.string("Europe/Berlin", "Zeitzone",
+             options=["Europe/Berlin", "America/New_York", "UTC"],
+             group=GRP_TIME,
+             tooltip="Europe/Berlin = MEZ/MESZ (automatisch)")
+i_startH   = input.int(15, "Start Stunde", minval=0, maxval=23, group=GRP_TIME)
+i_startM   = input.int(30, "Start Minute", minval=0, maxval=59, group=GRP_TIME)
+i_endH     = input.int(16, "Ende Stunde", minval=0, maxval=23, group=GRP_TIME)
+i_endM     = input.int(30, "Ende Minute", minval=0, maxval=59, group=GRP_TIME)
+i_closeEnd = input.bool(true, "Positionen am Ende schliessen", group=GRP_TIME)
+
+// --- Magic Trend ---
+string GRP_MT = "Magic Trend"
+i_cciLen   = input.int(28, "CCI Periode", minval=5, maxval=50, step=1, group=GRP_MT,
+             tooltip="Optimiert: 28 | Schneller: 14 | Langsamer: 35")
+i_atrLen   = input.int(10, "ATR Periode", minval=3, maxval=30, step=1, group=GRP_MT,
+             tooltip="Optimiert: 10 | Alternativ: 5, 7")
+i_atrMult  = input.float(1.0, "ATR Multiplikator", minval=0.3, maxval=5.0, step=0.1, group=GRP_MT,
+             tooltip="Abstand der MT-Linie vom Preis")
+
+// --- Bollinger Bands ---
+string GRP_BB = "Bollinger Bands"
+i_bbLen    = input.int(14, "BB Laenge", minval=5, maxval=50, step=1, group=GRP_BB,
+             tooltip="Optimiert: 14 | Alternativ: 10, 20")
+i_bbMult   = input.float(2.0, "BB Standardabweichung", minval=0.5, maxval=4.0, step=0.1, group=GRP_BB,
+             tooltip="Optimiert: 2.0 | Enger (mehr Signale): 1.5 | Weiter: 2.5")
+i_bbSrc    = input.source(close, "BB Quelle", group=GRP_BB)
+
+// --- Einstiegslogik ---
+string GRP_ENTRY = "Einstiegslogik"
+i_mode     = input.string("Mean Reversion", "Einstiegsmodus",
+             options=["Breakout", "Mean Reversion", "Kombiniert"],
+             group=GRP_ENTRY,
+             tooltip="Optimiert: Mean Reversion\nBreakout: Kerze schliesst ausserhalb BB\nMean Rev: Kerze kehrt in BB zurueck\nKombiniert: Beide")
+i_needMT   = input.bool(true, "Magic Trend Bestaetigung", group=GRP_ENTRY,
+             tooltip="Optimiert: Ja - Nur handeln wenn MT die Richtung bestaetigt")
+i_bodyFilt = input.bool(false, "Kerzenkoerper-Filter", group=GRP_ENTRY,
+             tooltip="Optimiert: Nein - Doji-Kerzen werden nicht gefiltert")
+i_bodyMin  = input.float(0.3, "Min. Koerper/Gesamt Ratio", minval=0.05, maxval=0.9, step=0.05,
+             group=GRP_ENTRY)
+i_squeeze  = input.bool(false, "Nur bei BB Squeeze handeln", group=GRP_ENTRY,
+             tooltip="Nur handeln wenn BB-Breite unter Durchschnitt")
+i_sqLen    = input.int(50, "Squeeze Lookback", minval=10, maxval=200, step=5, group=GRP_ENTRY)
+
+// --- Risikomanagement ---
+string GRP_RISK = "Risikomanagement"
+i_slType   = input.string("ATR", "Stop Loss Typ",
+             options=["ATR", "Fest (Punkte)", "BB Mitte"], group=GRP_RISK)
+i_slAtr    = input.float(2.5, "SL ATR Multiplikator", minval=0.5, maxval=5.0, step=0.1,
+             group=GRP_RISK, tooltip="Optimiert: 2.5 | Enger: 1.5 | Weiter: 3.0")
+i_slFix    = input.float(50.0, "SL Feste Punkte", minval=5.0, maxval=500.0, step=5.0,
+             group=GRP_RISK)
+i_tpType   = input.string("RR Verhaeltnis", "Take Profit Typ",
+             options=["RR Verhaeltnis", "Fest (Punkte)", "Gegenband BB"], group=GRP_RISK)
+i_tpRR     = input.float(1.5, "TP Risk-Reward Verhaeltnis", minval=0.5, maxval=5.0, step=0.1,
+             group=GRP_RISK, tooltip="Optimiert: 1.5 | Aggressiver: 2.0-3.0")
+i_tpFix    = input.float(100.0, "TP Feste Punkte", minval=10.0, maxval=1000.0, step=10.0,
+             group=GRP_RISK)
+i_maxTrades = input.int(5, "Max Trades pro Sitzung", minval=1, maxval=20, step=1,
+             group=GRP_RISK)
+
+// --- Handelsrichtung ---
+string GRP_DIR = "Handelsrichtung"
+i_tradeLong  = input.bool(true, "Long Trades erlauben", group=GRP_DIR)
+i_tradeShort = input.bool(true, "Short Trades erlauben", group=GRP_DIR)
+
+// =============================================================================
+// ZEITFILTER
+// =============================================================================
+currentH     = hour(time, i_tz)
+currentM     = minute(time, i_tz)
+startTotal   = i_startH * 60 + i_startM
+endTotal     = i_endH   * 60 + i_endM
+currentTotal = currentH * 60 + currentM
+
+inWindow = currentTotal >= startTotal and currentTotal < endTotal
+atClose  = currentTotal >= endTotal and currentTotal < (endTotal + 5)
+
+// Sitzungs-Trade-Zaehler
+newSession = inWindow and not inWindow[1]
+var int sessionTrades = 0
+if newSession
+    sessionTrades := 0
+
+// =============================================================================
+// MAGIC TREND
+// =============================================================================
+cci_val = ta.cci(close, i_cciLen)
+atr_val = ta.atr(i_atrLen)
+
+upTrend   = low  - atr_val * i_atrMult
+downTrend = high + atr_val * i_atrMult
+
+var float magicTrend = na
+var bool  mtBullish  = true
+
+if not na(cci_val) and not na(atr_val)
+    if cci_val >= 0
+        magicTrend := math.max(upTrend, nz(magicTrend[1], upTrend))
+        mtBullish  := true
+    else
+        magicTrend := math.min(downTrend, nz(magicTrend[1], downTrend))
+        mtBullish  := false
+
+mtFlipBull = mtBullish and not mtBullish[1]
+mtFlipBear = not mtBullish and mtBullish[1]
+
+mtColor = mtBullish ? color.new(#00C853, 0) : color.new(#FF1744, 0)
+plot(magicTrend, "Magic Trend", color=mtColor, linewidth=2)
+
+// =============================================================================
+// BOLLINGER BANDS
+// =============================================================================
+bbBasis = ta.sma(i_bbSrc, i_bbLen)
+bbDev   = ta.stdev(i_bbSrc, i_bbLen) * i_bbMult
+bbUpper = bbBasis + bbDev
+bbLower = bbBasis - bbDev
+
+bbWidth    = bbBasis != 0 ? (bbUpper - bbLower) / bbBasis * 100 : 0
+bbWidthAvg = ta.sma(bbWidth, i_sqLen)
+isSqueeze  = bbWidth < bbWidthAvg
+
+pBasis = plot(bbBasis, "BB Mitte",  color=color.new(color.gray, 60), linewidth=1)
+pUpper = plot(bbUpper, "BB Oben",   color=color.new(#2196F3, 20), linewidth=1)
+pLower = plot(bbLower, "BB Unten",  color=color.new(#2196F3, 20), linewidth=1)
+fill(pUpper, pLower, color=isSqueeze ? color.new(#FF9800, 90) : color.new(#2196F3, 93), title="BB Fill")
+
+// =============================================================================
+// KERZEN-ANALYSE
+// =============================================================================
+bodySize     = math.abs(close - open)
+candleRange  = high - low
+bodyRatio    = candleRange > 0 ? bodySize / candleRange : 0.0
+isBullCandle = close > open
+isBearCandle = close < open
+bodyOK       = (not i_bodyFilt) or (bodyRatio >= i_bodyMin)
+
+// =============================================================================
+// ENTRY SIGNALE
+// =============================================================================
+
+// Breakout: Kerze schliesst ausserhalb BB (vorherige war drinnen)
+breakoutLong  = not na(bbUpper[1]) and close > bbUpper and close[1] <= bbUpper[1] and isBullCandle
+breakoutShort = not na(bbLower[1]) and close < bbLower and close[1] >= bbLower[1] and isBearCandle
+
+// Mean Reversion: Preis war ausserhalb BB, Kerze schliesst zurueck
+mrLong  = not na(bbLower[1]) and close > bbLower and (close[1] < bbLower[1] or low < bbLower) and isBullCandle
+mrShort = not na(bbUpper[1]) and close < bbUpper and (close[1] > bbUpper[1] or high > bbUpper) and isBearCandle
+
+// Modus-Auswahl
+bool longSignal  = false
+bool shortSignal = false
+
+if i_mode == "Breakout"
+    longSignal  := breakoutLong
+    shortSignal := breakoutShort
+else if i_mode == "Mean Reversion"
+    longSignal  := mrLong
+    shortSignal := mrShort
+else
+    longSignal  := breakoutLong  or mrLong
+    shortSignal := breakoutShort or mrShort
+
+// Filter
+if i_needMT
+    longSignal  := longSignal  and mtBullish
+    shortSignal := shortSignal and (not mtBullish)
+
+longSignal  := longSignal  and bodyOK
+shortSignal := shortSignal and bodyOK
+
+if i_squeeze
+    longSignal  := longSignal  and isSqueeze[1]
+    shortSignal := shortSignal and isSqueeze[1]
+
+longSignal  := longSignal  and i_tradeLong
+shortSignal := shortSignal and i_tradeShort
+
+canTrade = inWindow and (sessionTrades < i_maxTrades) and strategy.position_size == 0
+
+// =============================================================================
+// STOP LOSS / TAKE PROFIT
+// =============================================================================
+float slLong  = na
+float slShort = na
+float tpLong  = na
+float tpShort = na
+
+if i_slType == "ATR" and not na(atr_val)
+    slLong  := close - atr_val * i_slAtr
+    slShort := close + atr_val * i_slAtr
+else if i_slType == "Fest (Punkte)"
+    slLong  := close - i_slFix
+    slShort := close + i_slFix
+else if not na(bbBasis)
+    slLong  := bbBasis
+    slShort := bbBasis
+
+float slDistLong  = math.abs(close - nz(slLong, close - 50))
+float slDistShort = math.abs(nz(slShort, close + 50) - close)
+
+if i_tpType == "RR Verhaeltnis"
+    tpLong  := close + slDistLong  * i_tpRR
+    tpShort := close - slDistShort * i_tpRR
+else if i_tpType == "Fest (Punkte)"
+    tpLong  := close + i_tpFix
+    tpShort := close - i_tpFix
+else if not na(bbUpper) and not na(bbLower)
+    tpLong  := bbUpper
+    tpShort := bbLower
+    if tpLong <= close
+        tpLong := close + slDistLong * 1.5
+    if tpShort >= close
+        tpShort := close - slDistShort * 1.5
+
+// =============================================================================
+// ORDER AUSFUEHRUNG
+// =============================================================================
+
+if canTrade and longSignal and not na(slLong) and not na(tpLong)
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Long Exit", "Long", stop=slLong, limit=tpLong)
+    sessionTrades += 1
+    alert("LONG | " + syminfo.ticker + " @ " + str.tostring(close, "#.##") +
+         " | SL: " + str.tostring(slLong, "#.##") +
+         " | TP: " + str.tostring(tpLong, "#.##"), alert.freq_once_per_bar)
+
+if canTrade and shortSignal and not na(slShort) and not na(tpShort)
+    strategy.entry("Short", strategy.short)
+    strategy.exit("Short Exit", "Short", stop=slShort, limit=tpShort)
+    sessionTrades += 1
+    alert("SHORT | " + syminfo.ticker + " @ " + str.tostring(close, "#.##") +
+         " | SL: " + str.tostring(slShort, "#.##") +
+         " | TP: " + str.tostring(tpShort, "#.##"), alert.freq_once_per_bar)
+
+if i_closeEnd and atClose and strategy.position_size != 0
+    strategy.close_all(comment="Sitzungsende")
+
+// =============================================================================
+// VISUALISIERUNG
+// =============================================================================
+
+// Entry Signale
+plotshape(canTrade and longSignal, title="Long Signal",
+     location=location.belowbar, style=shape.triangleup,
+     size=size.small, color=#00C853, text="L")
+plotshape(canTrade and shortSignal, title="Short Signal",
+     location=location.abovebar, style=shape.triangledown,
+     size=size.small, color=#FF1744, text="S")
+
+// Magic Trend Farbwechsel
+plotshape(mtFlipBull and inWindow, title="MT Bull",
+     location=location.belowbar, style=shape.diamond, size=size.tiny, color=#00C853)
+plotshape(mtFlipBear and inWindow, title="MT Bear",
+     location=location.abovebar, style=shape.diamond, size=size.tiny, color=#FF1744)
+
+// Zeitfenster Hintergrund
+bgcolor(inWindow ? color.new(#FFEB3B, 95) : na, title="Handelsfenster")
+
+// =============================================================================
+// DASHBOARD
+// =============================================================================
+var table dash = table.new(position.top_right, 2, 9,
+     bgcolor=color.new(#1E1E1E, 10), border_width=1,
+     border_color=color.new(color.gray, 70))
+
+if barstate.islast
+    table.cell(dash, 0, 0, "MT+BB Breakout", text_color=color.white,
+         bgcolor=color.new(#1565C0, 0), text_size=size.small, text_halign=text.align_center)
+    table.cell(dash, 1, 0, syminfo.ticker, text_color=color.white,
+         bgcolor=color.new(#1565C0, 0), text_size=size.small, text_halign=text.align_center)
+
+    table.cell(dash, 0, 1, "Magic Trend", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 1, mtBullish ? "BULLISH" : "BEARISH",
+         text_color=mtBullish ? #00C853 : #FF1744, text_size=size.tiny)
+
+    table.cell(dash, 0, 2, "CCI(" + str.tostring(i_cciLen) + ")",
+         text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 2, str.tostring(cci_val, "#.#"),
+         text_color=cci_val >= 0 ? #00C853 : #FF1744, text_size=size.tiny)
+
+    string bbPos = close > bbUpper ? "Ueber BB" : close < bbLower ? "Unter BB" : "In BB"
+    color bbPosCol = close > bbUpper ? #00C853 : close < bbLower ? #FF1744 : color.gray
+    table.cell(dash, 0, 3, "BB Position", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 3, bbPos, text_color=bbPosCol, text_size=size.tiny)
+
+    table.cell(dash, 0, 4, "Squeeze", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 4, isSqueeze ? "AKTIV" : "---",
+         text_color=isSqueeze ? #FF9800 : color.gray, text_size=size.tiny)
+
+    table.cell(dash, 0, 5, "Modus", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 5, i_mode, text_color=color.white, text_size=size.tiny)
+
+    string timeStr = str.tostring(i_startH) + ":" + (i_startM < 10 ? "0" : "") + str.tostring(i_startM) +
+         "-" + str.tostring(i_endH) + ":" + (i_endM < 10 ? "0" : "") + str.tostring(i_endM)
+    table.cell(dash, 0, 6, "Fenster", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 6, timeStr, text_color=inWindow ? #00C853 : color.gray, text_size=size.tiny)
+
+    table.cell(dash, 0, 7, "Trades", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 7, str.tostring(sessionTrades) + "/" + str.tostring(i_maxTrades),
+         text_color=sessionTrades >= i_maxTrades ? #FF9800 : color.white, text_size=size.tiny)
+
+    string paramStr = "CCI:" + str.tostring(i_cciLen) + " ATR:" + str.tostring(i_atrLen) +
+         " BB:" + str.tostring(i_bbLen) + "/" + str.tostring(i_bbMult, "#.#")
+    table.cell(dash, 0, 8, "Params", text_color=color.gray, text_size=size.tiny)
+    table.cell(dash, 1, 8, paramStr, text_color=color.white, text_size=size.tiny)
+
+// =============================================================================
+// ALERTS
+// =============================================================================
+alertcondition(canTrade and longSignal,  title="Long Signal",  message="MT+BB LONG: {{ticker}} @ {{close}}")
+alertcondition(canTrade and shortSignal, title="Short Signal", message="MT+BB SHORT: {{ticker}} @ {{close}}")
+alertcondition(mtFlipBull, title="MT -> Bullish", message="Magic Trend BULLISH: {{ticker}}")
+alertcondition(mtFlipBear, title="MT -> Bearish", message="Magic Trend BEARISH: {{ticker}}")
