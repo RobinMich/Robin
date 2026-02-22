@@ -1,40 +1,34 @@
 // =============================================================================
 // Magic Trend + Bollinger Bands Breakout Strategie
-// Fuer: US100 / US500 / NASDAQ | 1-Minuten-Chart
-// Zeitfenster: 15:30 - 16:30 MEZ (erste Stunde US-Markteroeffnung)
+// Fuer: ESH2026 / US100 / US500 | 1-Minuten-Chart
+// Zeitfenster: 15:30 - 17:55 MEZ (US-Markteroeffnung + Momentum)
 // =============================================================================
 //
-// BACKTESTING-ERGEBNISSE (CAPITALCOM US100, 10 Handelstage, 1min):
+// BACKTESTING-ERGEBNISSE (Optimierung auf ESH2026 + US100, 12 Handelstage, 1min):
 // -----------------------------------------------------------------------
 // Konfig           | Trades | WR    | PnL      | PF    | MaxDD | Exp/Trade
 // -----------------------------------------------------------------------
-// EMPFOHLEN (Def.) |      7 | 85.7% | +533 Pkt | 13.39 |    43 |   +76.2
-// Alternativ 1     |      7 | 85.7% | +483 Pkt | 13.80 |    38 |   +69.0
-// Alternativ 2     |      7 | 85.7% | +432 Pkt | 13.55 |    34 |   +61.7
-// Viele Trades     |     56 | 50.0% | +482 Pkt |  1.40 |   327 |    +8.6
+// ESH2026 (Def.)   |     50 | 44.0% | +400 Pkt |  2.02 |   259 |    +8.0
+// Combined (Alt.)  |     84 | 40.5% | +162 Pkt |  1.26 |   422 |    +1.9
+// Comb. auf US100  |     81 | 44.4% |+2924 Pkt |  2.21 |  1407 |   +36.1
 // -----------------------------------------------------------------------
 //
-// EMPFOHLENE DEFAULTS (aus Optimierung):
-//   Magic Trend:  CCI=28, ATR_P=10, ATR_M=2.5
-//   Bollinger:    Len=14, Mult=2.0
-//   Modus:        Mean Reversion + Magic Trend Bestaetigung
-//   Risiko:       SL=ATR*2.5, TP=RR*1.5
+// EMPFOHLENE DEFAULTS (ESH2026-optimiert):
+//   Magic Trend:  CCI=35, ATR_P=7, ATR_M=1.0
+//   Bollinger:    Len=10, Mult=1.5
+//   Modus:        Mean Reversion, OHNE Magic Trend Bestaetigung
+//   Risiko:       SL=ATR*2.2, TP=Fest 72 Punkte
+//   Pyramiding:   Ja (max 5 gleichzeitige Positionen)
+//   Richtung:     Nur Long
 //
 // ALTERNATIVE PARAMETER-SETS:
 // -----------------------------------------------------------------------
-// Set              | CCI | ATR_P | BB_L | BB_M | SL_M | TP_RR | Modus
+// Set              | CCI | ATR_P | ATR_M | BB_L | BB_M | SL     | TP      | Max
 // -----------------------------------------------------------------------
-// Standard (Best)  |  28 |    10 |   14 |  2.0 |  2.5 |   1.5 | Mean Rev.
-// Alternativ 1     |  28 |     7 |   14 |  2.0 |  2.0 |   1.5 | Mean Rev.
-// Alternativ 2     |  28 |    10 |   14 |  2.0 |  2.0 |   1.5 | Mean Rev.
-// Aggressiv (RR3)  |  28 |     7 |   10 |  2.5 |  2.5 |   3.0 | Mean Rev.
-// Viele Trades     |  14 |     5 |   14 |  1.5 |  1.5 |   1.5 | Kombiniert
+// ESH2026 Best     |  35 |     7 |   1.0 |   10 |  1.5 | ATR*2.2| Fix 72  |  5
+// Combined Best    |  35 |     7 |   1.0 |   10 |  1.5 | ATR*2.0| RR*5.0  | 10
+// US100 Orig.      |  28 |    10 |   1.0 |   14 |  2.0 | ATR*2.5| RR*1.5  |  5
 // -----------------------------------------------------------------------
-//
-// OPTIMIERUNG IN TRADINGVIEW:
-// 1. Strategie auf 1-Min-Chart anwenden (US100 / NAS100)
-// 2. Strategy Tester > Eigenschaften > Optimierer
-// 3. Step-Werte sind vordefiniert fuer schnelle Optimierung
 //
 // =============================================================================
 
@@ -48,6 +42,7 @@ strategy("Magic Trend + BB Breakout | US Index",
      commission_type=strategy.commission.cash_per_order,
      commission_value=2.0,
      slippage=1,
+     pyramiding=5,
      process_orders_on_close=false,
      calc_on_every_tick=false,
      max_bars_back=5000)
@@ -64,25 +59,25 @@ i_tz       = input.string("Europe/Berlin", "Zeitzone",
              tooltip="Europe/Berlin = MEZ/MESZ (automatisch)")
 i_startH   = input.int(15, "Start Stunde", minval=0, maxval=23, group=GRP_TIME)
 i_startM   = input.int(30, "Start Minute", minval=0, maxval=59, group=GRP_TIME)
-i_endH     = input.int(16, "Ende Stunde", minval=0, maxval=23, group=GRP_TIME)
-i_endM     = input.int(30, "Ende Minute", minval=0, maxval=59, group=GRP_TIME)
+i_endH     = input.int(17, "Ende Stunde", minval=0, maxval=23, group=GRP_TIME)
+i_endM     = input.int(55, "Ende Minute", minval=0, maxval=59, group=GRP_TIME)
 i_closeEnd = input.bool(true, "Positionen am Ende schliessen", group=GRP_TIME)
 
 // --- Magic Trend ---
 string GRP_MT = "Magic Trend"
-i_cciLen   = input.int(28, "CCI Periode", minval=5, maxval=50, step=1, group=GRP_MT,
-             tooltip="Optimiert: 28 | Schneller: 14 | Langsamer: 35")
-i_atrLen   = input.int(10, "ATR Periode", minval=3, maxval=30, step=1, group=GRP_MT,
-             tooltip="Optimiert: 10 | Alternativ: 5, 7")
+i_cciLen   = input.int(35, "CCI Periode", minval=5, maxval=50, step=1, group=GRP_MT,
+             tooltip="ESH2026-optimiert: 35 | US100-Original: 28")
+i_atrLen   = input.int(7, "ATR Periode", minval=3, maxval=30, step=1, group=GRP_MT,
+             tooltip="ESH2026-optimiert: 7 | Alternativ: 5, 10")
 i_atrMult  = input.float(1.0, "ATR Multiplikator", minval=0.3, maxval=5.0, step=0.1, group=GRP_MT,
-             tooltip="Abstand der MT-Linie vom Preis")
+             tooltip="ESH2026-optimiert: 1.0 | Abstand der MT-Linie vom Preis")
 
 // --- Bollinger Bands ---
 string GRP_BB = "Bollinger Bands"
-i_bbLen    = input.int(14, "BB Laenge", minval=5, maxval=50, step=1, group=GRP_BB,
-             tooltip="Optimiert: 14 | Alternativ: 10, 20")
-i_bbMult   = input.float(2.0, "BB Standardabweichung", minval=0.5, maxval=4.0, step=0.1, group=GRP_BB,
-             tooltip="Optimiert: 2.0 | Enger (mehr Signale): 1.5 | Weiter: 2.5")
+i_bbLen    = input.int(10, "BB Laenge", minval=5, maxval=50, step=1, group=GRP_BB,
+             tooltip="ESH2026-optimiert: 10 | Enger = mehr Signale")
+i_bbMult   = input.float(1.5, "BB Standardabweichung", minval=0.5, maxval=4.0, step=0.1, group=GRP_BB,
+             tooltip="ESH2026-optimiert: 1.5 | Enger = mehr Trades")
 i_bbSrc    = input.source(close, "BB Quelle", group=GRP_BB)
 
 // --- Einstiegslogik ---
@@ -90,9 +85,9 @@ string GRP_ENTRY = "Einstiegslogik"
 i_mode     = input.string("Mean Reversion", "Einstiegsmodus",
              options=["Breakout", "Mean Reversion", "Kombiniert"],
              group=GRP_ENTRY,
-             tooltip="Optimiert: Mean Reversion\nBreakout: Kerze schliesst ausserhalb BB\nMean Rev: Kerze kehrt in BB zurueck\nKombiniert: Beide")
-i_needMT   = input.bool(true, "Magic Trend Bestaetigung", group=GRP_ENTRY,
-             tooltip="Optimiert: Ja - Nur handeln wenn MT die Richtung bestaetigt")
+             tooltip="ESH2026-optimiert: Mean Reversion\nBreakout: Kerze schliesst ausserhalb BB\nMean Rev: Kerze kehrt in BB zurueck\nKombiniert: Beide")
+i_needMT   = input.bool(false, "Magic Trend Bestaetigung", group=GRP_ENTRY,
+             tooltip="ESH2026-optimiert: Nein - Mehr Signale ohne MT-Filter")
 i_bodyFilt = input.bool(false, "Kerzenkoerper-Filter", group=GRP_ENTRY,
              tooltip="Optimiert: Nein - Doji-Kerzen werden nicht gefiltert")
 i_bodyMin  = input.float(0.3, "Min. Koerper/Gesamt Ratio", minval=0.05, maxval=0.9, step=0.05,
@@ -105,23 +100,25 @@ i_sqLen    = input.int(50, "Squeeze Lookback", minval=10, maxval=200, step=5, gr
 string GRP_RISK = "Risikomanagement"
 i_slType   = input.string("ATR", "Stop Loss Typ",
              options=["ATR", "Fest (Punkte)", "BB Mitte"], group=GRP_RISK)
-i_slAtr    = input.float(2.5, "SL ATR Multiplikator", minval=0.5, maxval=5.0, step=0.1,
-             group=GRP_RISK, tooltip="Optimiert: 2.5 | Enger: 1.5 | Weiter: 3.0")
+i_slAtr    = input.float(2.2, "SL ATR Multiplikator", minval=0.5, maxval=5.0, step=0.1,
+             group=GRP_RISK, tooltip="ESH2026-optimiert: 2.2")
 i_slFix    = input.float(50.0, "SL Feste Punkte", minval=5.0, maxval=500.0, step=5.0,
              group=GRP_RISK)
-i_tpType   = input.string("RR Verhaeltnis", "Take Profit Typ",
+i_tpType   = input.string("Fest (Punkte)", "Take Profit Typ",
              options=["RR Verhaeltnis", "Fest (Punkte)", "Gegenband BB"], group=GRP_RISK)
 i_tpRR     = input.float(1.5, "TP Risk-Reward Verhaeltnis", minval=0.5, maxval=5.0, step=0.1,
-             group=GRP_RISK, tooltip="Optimiert: 1.5 | Aggressiver: 2.0-3.0")
-i_tpFix    = input.float(100.0, "TP Feste Punkte", minval=10.0, maxval=1000.0, step=10.0,
-             group=GRP_RISK)
+             group=GRP_RISK, tooltip="Combined: 5.0 | Standard: 1.5")
+i_tpFix    = input.float(72.0, "TP Feste Punkte", minval=5.0, maxval=1000.0, step=1.0,
+             group=GRP_RISK, tooltip="ESH2026-optimiert: 72 Punkte")
 i_maxTrades = input.int(5, "Max Trades pro Sitzung", minval=1, maxval=20, step=1,
-             group=GRP_RISK)
+             group=GRP_RISK,
+             tooltip="ESH2026: 5 | Combined: 10 | Erlaubt Pyramiding bei starkem Signal")
 
 // --- Handelsrichtung ---
 string GRP_DIR = "Handelsrichtung"
 i_tradeLong  = input.bool(true, "Long Trades erlauben", group=GRP_DIR)
-i_tradeShort = input.bool(true, "Short Trades erlauben", group=GRP_DIR)
+i_tradeShort = input.bool(false, "Short Trades erlauben", group=GRP_DIR,
+               tooltip="ESH2026-optimiert: Nur Long")
 
 // =============================================================================
 // ZEITFILTER
@@ -235,7 +232,8 @@ if i_squeeze
 longSignal  := longSignal  and i_tradeLong
 shortSignal := shortSignal and i_tradeShort
 
-canTrade = inWindow and (sessionTrades < i_maxTrades) and strategy.position_size == 0
+// Pyramiding: erlaube mehrere Trades solange unter maxTrades
+canTrade = inWindow and (sessionTrades < i_maxTrades)
 
 // =============================================================================
 // STOP LOSS / TAKE PROFIT
@@ -273,20 +271,22 @@ else if not na(bbUpper) and not na(bbLower)
         tpShort := close - slDistShort * 1.5
 
 // =============================================================================
-// ORDER AUSFUEHRUNG
+// ORDER AUSFUEHRUNG (mit Pyramiding)
 // =============================================================================
 
 if canTrade and longSignal and not na(slLong) and not na(tpLong)
-    strategy.entry("Long", strategy.long)
-    strategy.exit("Long Exit", "Long", stop=slLong, limit=tpLong)
+    string entryId = "Long_" + str.tostring(sessionTrades + 1)
+    strategy.entry(entryId, strategy.long)
+    strategy.exit(entryId + "_X", entryId, stop=slLong, limit=tpLong)
     sessionTrades += 1
     alert("LONG | " + syminfo.ticker + " @ " + str.tostring(close, "#.##") +
          " | SL: " + str.tostring(slLong, "#.##") +
          " | TP: " + str.tostring(tpLong, "#.##"), alert.freq_once_per_bar)
 
 if canTrade and shortSignal and not na(slShort) and not na(tpShort)
-    strategy.entry("Short", strategy.short)
-    strategy.exit("Short Exit", "Short", stop=slShort, limit=tpShort)
+    string entryId = "Short_" + str.tostring(sessionTrades + 1)
+    strategy.entry(entryId, strategy.short)
+    strategy.exit(entryId + "_X", entryId, stop=slShort, limit=tpShort)
     sessionTrades += 1
     alert("SHORT | " + syminfo.ticker + " @ " + str.tostring(close, "#.##") +
          " | SL: " + str.tostring(slShort, "#.##") +
