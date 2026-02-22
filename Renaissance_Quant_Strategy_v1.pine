@@ -81,9 +81,9 @@ log_factors_on  = input.bool(false,"Faktoren loggen (jeder Bar)", group=grp_log)
 
 hurst_calc(src, length) =>
     half = math.floor(length / 2)
-    full_var = ta.variance(src, length)
-    half_var = ta.variance(src, half)
-    ratio = full_var > 0 and half_var > 0 ? math.log(full_var / half_var) / math.log(2.0) : 0.5
+    fullVariance = ta.variance(src, length)
+    halfVariance = ta.variance(src, half)
+    ratio = fullVariance > 0 and halfVariance > 0 ? math.log(fullVariance / halfVariance) / math.log(2.0) : 0.5
     math.max(0.0, math.min(1.0, ratio / 2.0))
 
 score_bg(score) =>
