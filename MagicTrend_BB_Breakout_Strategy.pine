@@ -120,6 +120,19 @@ i_tradeLong  = input.bool(true, "Long Trades erlauben", group=GRP_DIR)
 i_tradeShort = input.bool(false, "Short Trades erlauben", group=GRP_DIR,
                tooltip="ESH2026-optimiert: Nur Long")
 
+// --- Pine Protokolle ---
+string GRP_LOG = "Pine Protokolle"
+i_logEnabled = input.bool(true, "Protokolle aktivieren", group=GRP_LOG,
+               tooltip="Aktiviert detaillierte Logs im Pine Logs Panel")
+i_logSignals = input.bool(true, "Signal-Details loggen", group=GRP_LOG,
+               tooltip="Loggt alle erkannten und gefilterten Signale")
+i_logTrades  = input.bool(true, "Trade-Ausfuehrung loggen", group=GRP_LOG,
+               tooltip="Loggt Entry/Exit mit Preis, SL, TP Details")
+i_logSession = input.bool(true, "Sitzungs-Events loggen", group=GRP_LOG,
+               tooltip="Loggt Sitzungsstart, -ende und Zusammenfassung")
+i_logMT      = input.bool(true, "Magic Trend Wechsel loggen", group=GRP_LOG,
+               tooltip="Loggt Trendrichtungswechsel")
+
 // =============================================================================
 // ZEITFILTER
 // =============================================================================
@@ -133,10 +146,23 @@ inWindow = currentTotal >= startTotal and currentTotal < endTotal
 atClose  = currentTotal >= endTotal and currentTotal < (endTotal + 5)
 
 // Sitzungs-Trade-Zaehler
-newSession = inWindow and not inWindow[1]
+newSession  = inWindow and not inWindow[1]
+endSession  = not inWindow and inWindow[1]
 var int sessionTrades = 0
 if newSession
     sessionTrades := 0
+    if i_logEnabled and i_logSession
+        log.info("=== SITZUNG GESTARTET === {0} | Fenster: {1}:{2}-{3}:{4} | Modus: {5} | Max: {6}",
+             syminfo.ticker,
+             str.tostring(i_startH), i_startM < 10 ? "0" + str.tostring(i_startM) : str.tostring(i_startM),
+             str.tostring(i_endH), i_endM < 10 ? "0" + str.tostring(i_endM) : str.tostring(i_endM),
+             i_mode, str.tostring(i_maxTrades))
+
+if endSession and i_logEnabled and i_logSession
+    log.info("=== SITZUNG BEENDET === {0} | Trades: {1}/{2} | Offene Pos: {3} | Equity: {4}",
+         syminfo.ticker, str.tostring(sessionTrades), str.tostring(i_maxTrades),
+         str.tostring(strategy.position_size, "#.##"),
+         str.tostring(strategy.equity, "#.##"))
 
 // =============================================================================
 // MAGIC TREND
@@ -161,6 +187,16 @@ if not na(cci_val) and not na(atr_val)
 mtFlipBull = mtBullish and not mtBullish[1]
 mtFlipBear = not mtBullish and mtBullish[1]
 
+if i_logEnabled and i_logMT and mtFlipBull
+    log.info("MT BULLISH | CCI: {0} | ATR: {1} | Preis: {2} | MT-Linie: {3}",
+         str.tostring(cci_val, "#.#"), str.tostring(atr_val, "#.##"),
+         str.tostring(close, "#.##"), str.tostring(magicTrend, "#.##"))
+
+if i_logEnabled and i_logMT and mtFlipBear
+    log.warning("MT BEARISH | CCI: {0} | ATR: {1} | Preis: {2} | MT-Linie: {3}",
+         str.tostring(cci_val, "#.#"), str.tostring(atr_val, "#.##"),
+         str.tostring(close, "#.##"), str.tostring(magicTrend, "#.##"))
+
 mtColor = mtBullish ? color.new(#00C853, 0) : color.new(#FF1744, 0)
 plot(magicTrend, "Magic Trend", color=mtColor, linewidth=2)
 
@@ -175,6 +211,20 @@ bbLower = bbBasis - bbDev
 bbWidth    = bbBasis != 0 ? (bbUpper - bbLower) / bbBasis * 100 : 0
 bbWidthAvg = ta.sma(bbWidth, i_sqLen)
 isSqueeze  = bbWidth < bbWidthAvg
+
+// BB Squeeze Wechsel protokollieren
+squeezeStart = isSqueeze and not isSqueeze[1]
+squeezeEnd   = not isSqueeze and isSqueeze[1]
+
+if i_logEnabled and i_logMT and inWindow and squeezeStart
+    log.info("BB SQUEEZE START | Breite: {0} (Avg: {1}) | BB: [{2} / {3} / {4}]",
+         str.tostring(bbWidth, "#.###"), str.tostring(bbWidthAvg, "#.###"),
+         str.tostring(bbLower, "#.##"), str.tostring(bbBasis, "#.##"), str.tostring(bbUpper, "#.##"))
+
+if i_logEnabled and i_logMT and inWindow and squeezeEnd
+    log.info("BB SQUEEZE ENDE | Breite: {0} (Avg: {1}) | BB: [{2} / {3} / {4}]",
+         str.tostring(bbWidth, "#.###"), str.tostring(bbWidthAvg, "#.###"),
+         str.tostring(bbLower, "#.##"), str.tostring(bbBasis, "#.##"), str.tostring(bbUpper, "#.##"))
 
 pBasis = plot(bbBasis, "BB Mitte",  color=color.new(color.gray, 60), linewidth=1)
 pUpper = plot(bbUpper, "BB Oben",   color=color.new(#2196F3, 20), linewidth=1)
@@ -217,23 +267,82 @@ else
     longSignal  := breakoutLong  or mrLong
     shortSignal := breakoutShort or mrShort
 
+// Roh-Signale speichern (vor Filter)
+bool rawLong  = longSignal
+bool rawShort = shortSignal
+
 // Filter
 if i_needMT
     longSignal  := longSignal  and mtBullish
     shortSignal := shortSignal and (not mtBullish)
 
+bool filteredByMT_L = rawLong  and i_needMT and not mtBullish
+bool filteredByMT_S = rawShort and i_needMT and mtBullish
+
 longSignal  := longSignal  and bodyOK
 shortSignal := shortSignal and bodyOK
+
+bool filteredByBody_L = rawLong  and not filteredByMT_L and longSignal == false and not bodyOK
+bool filteredByBody_S = rawShort and not filteredByMT_S and shortSignal == false and not bodyOK
 
 if i_squeeze
     longSignal  := longSignal  and isSqueeze[1]
     shortSignal := shortSignal and isSqueeze[1]
+
+bool filteredBySqueeze_L = rawLong  and not filteredByMT_L and not filteredByBody_L and longSignal == false and i_squeeze and not isSqueeze[1]
+bool filteredBySqueeze_S = rawShort and not filteredByMT_S and not filteredByBody_S and shortSignal == false and i_squeeze and not isSqueeze[1]
 
 longSignal  := longSignal  and i_tradeLong
 shortSignal := shortSignal and i_tradeShort
 
 // Pyramiding: erlaube mehrere Trades solange unter maxTrades
 canTrade = inWindow and (sessionTrades < i_maxTrades)
+
+// --- Signal-Protokolle ---
+if i_logEnabled and i_logSignals and inWindow
+    // Roh-Signal erkannt aber gefiltert
+    if rawLong and not longSignal
+        string rejectReason = filteredByMT_L ? "Magic Trend BEARISH" : filteredByBody_L ? "Kerpenkoerper zu klein (" + str.tostring(bodyRatio, "#.##") + ")" : filteredBySqueeze_L ? "Kein BB Squeeze" : not i_tradeLong ? "Long deaktiviert" : "Unbekannt"
+        log.warning("LONG SIGNAL GEFILTERT | Preis: {0} | Grund: {1} | BB: [{2} / {3} / {4}]",
+             str.tostring(close, "#.##"), rejectReason,
+             str.tostring(bbLower, "#.##"), str.tostring(bbBasis, "#.##"), str.tostring(bbUpper, "#.##"))
+
+    if rawShort and not shortSignal
+        string rejectReason = filteredByMT_S ? "Magic Trend BULLISH" : filteredByBody_S ? "Kerpenkoerper zu klein (" + str.tostring(bodyRatio, "#.##") + ")" : filteredBySqueeze_S ? "Kein BB Squeeze" : not i_tradeShort ? "Short deaktiviert" : "Unbekannt"
+        log.warning("SHORT SIGNAL GEFILTERT | Preis: {0} | Grund: {1} | BB: [{2} / {3} / {4}]",
+             str.tostring(close, "#.##"), rejectReason,
+             str.tostring(bbLower, "#.##"), str.tostring(bbBasis, "#.##"), str.tostring(bbUpper, "#.##"))
+
+    // Signal erkannt und durchgelassen
+    if longSignal and not canTrade
+        log.warning("LONG SIGNAL BLOCKIERT | Preis: {0} | Grund: {1}",
+             str.tostring(close, "#.##"),
+             not inWindow ? "Ausserhalb Handelsfenster" : "Max Trades erreicht (" + str.tostring(sessionTrades) + "/" + str.tostring(i_maxTrades) + ")")
+
+    if shortSignal and not canTrade
+        log.warning("SHORT SIGNAL BLOCKIERT | Preis: {0} | Grund: {1}",
+             str.tostring(close, "#.##"),
+             not inWindow ? "Ausserhalb Handelsfenster" : "Max Trades erreicht (" + str.tostring(sessionTrades) + "/" + str.tostring(i_maxTrades) + ")")
+
+// =============================================================================
+// POSITIONS-TRACKING (SL/TP Erkennung)
+// =============================================================================
+var float prevPosSize = 0.0
+posChanged    = strategy.position_size != prevPosSize
+posReduced    = math.abs(strategy.position_size) < math.abs(prevPosSize) and prevPosSize != 0
+posClosed     = strategy.position_size == 0 and prevPosSize != 0
+
+if i_logEnabled and i_logTrades and posReduced and not posClosed and inWindow
+    log.info("<<< TEIL-EXIT | Pos: {0} -> {1} | Preis: {2} | PnL offen: {3}",
+         str.tostring(prevPosSize, "#.##"), str.tostring(strategy.position_size, "#.##"),
+         str.tostring(close, "#.##"), str.tostring(strategy.openprofit, "#.##"))
+
+if i_logEnabled and i_logTrades and posClosed and not atClose
+    log.info("<<< POSITION GESCHLOSSEN | Vorher: {0} | Preis: {1} | Netto PnL: {2} | Equity: {3}",
+         str.tostring(prevPosSize, "#.##"), str.tostring(close, "#.##"),
+         str.tostring(strategy.netprofit, "#.##"), str.tostring(strategy.equity, "#.##"))
+
+prevPosSize := strategy.position_size
 
 // =============================================================================
 // STOP LOSS / TAKE PROFIT
@@ -279,6 +388,17 @@ if canTrade and longSignal and not na(slLong) and not na(tpLong)
     strategy.entry(entryId, strategy.long)
     strategy.exit(entryId + "_X", entryId, stop=slLong, limit=tpLong)
     sessionTrades += 1
+    if i_logEnabled and i_logTrades
+        string signalTyp = breakoutLong ? "Breakout" : "Mean Rev."
+        log.info(">>> LONG ENTRY #{0} | {1} @ {2} | SL: {3} ({4} Pkt) | TP: {5} ({6} Pkt)",
+             str.tostring(sessionTrades), signalTyp,
+             str.tostring(close, "#.##"),
+             str.tostring(slLong, "#.##"), str.tostring(close - slLong, "#.#"),
+             str.tostring(tpLong, "#.##"), str.tostring(tpLong - close, "#.#"))
+        log.info("    MT: {0} | CCI: {1} | BB: [{2} / {3} / {4}] | ATR: {5}",
+             mtBullish ? "BULL" : "BEAR", str.tostring(cci_val, "#.#"),
+             str.tostring(bbLower, "#.##"), str.tostring(bbBasis, "#.##"), str.tostring(bbUpper, "#.##"),
+             str.tostring(atr_val, "#.##"))
     alert("LONG | " + syminfo.ticker + " @ " + str.tostring(close, "#.##") +
          " | SL: " + str.tostring(slLong, "#.##") +
          " | TP: " + str.tostring(tpLong, "#.##"), alert.freq_once_per_bar)
@@ -288,11 +408,27 @@ if canTrade and shortSignal and not na(slShort) and not na(tpShort)
     strategy.entry(entryId, strategy.short)
     strategy.exit(entryId + "_X", entryId, stop=slShort, limit=tpShort)
     sessionTrades += 1
+    if i_logEnabled and i_logTrades
+        string signalTyp = breakoutShort ? "Breakout" : "Mean Rev."
+        log.info(">>> SHORT ENTRY #{0} | {1} @ {2} | SL: {3} ({4} Pkt) | TP: {5} ({6} Pkt)",
+             str.tostring(sessionTrades), signalTyp,
+             str.tostring(close, "#.##"),
+             str.tostring(slShort, "#.##"), str.tostring(slShort - close, "#.#"),
+             str.tostring(tpShort, "#.##"), str.tostring(close - tpShort, "#.#"))
+        log.info("    MT: {0} | CCI: {1} | BB: [{2} / {3} / {4}] | ATR: {5}",
+             mtBullish ? "BULL" : "BEAR", str.tostring(cci_val, "#.#"),
+             str.tostring(bbLower, "#.##"), str.tostring(bbBasis, "#.##"), str.tostring(bbUpper, "#.##"),
+             str.tostring(atr_val, "#.##"))
     alert("SHORT | " + syminfo.ticker + " @ " + str.tostring(close, "#.##") +
          " | SL: " + str.tostring(slShort, "#.##") +
          " | TP: " + str.tostring(tpShort, "#.##"), alert.freq_once_per_bar)
 
 if i_closeEnd and atClose and strategy.position_size != 0
+    if i_logEnabled and i_logTrades
+        log.warning("<<< SITZUNGSENDE CLOSE ALL | Pos: {0} | Preis: {1} | Equity: {2}",
+             str.tostring(strategy.position_size, "#.##"),
+             str.tostring(close, "#.##"),
+             str.tostring(strategy.equity, "#.##"))
     strategy.close_all(comment="Sitzungsende")
 
 // =============================================================================
