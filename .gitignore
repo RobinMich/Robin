@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+pine-logs-*-backtest.csv
+pine-logs-*-Combined-*.csv

@@ -141,6 +141,80 @@ def bt(bars,ind,sh,sm,eh,em,mode,nmt,slt,slv,tpt,tpv,mxt,pyr,mxp,tl,ts,comm=4.0)
 
 def pnl(trades):return sum(t.pnl for t in trades)
 
+def generate_pine_log(bars, trades, name, ic, tw, m, nmt, st, sv, tt, tv, mt, tl, ts, path):
+    """Erzeugt pine-logs CSV im gleichen Format wie die PineScript Strategie."""
+    ms = {'bo': 'Breakout', 'mr': 'Mean Reversion', 'co': 'Kombiniert'}[m]
+    ss = {'a': 'ATR', 'f': 'Fest', 'b': 'BB Mitte'}[st]
+    ts_ = {'r': 'RR', 'f': 'Fest', 'o': 'Gegenband'}[tt]
+
+    # Index trades by entry bar and exit bar
+    entry_at = {}
+    exit_at = {}
+    for t in trades:
+        entry_at.setdefault(t.idx, []).append(t)
+        if t.xi >= 0:
+            exit_at.setdefault(t.xi, []).append(t)
+
+    stH, stM, enH, enM = tw
+    st_min = stH * 60 + stM
+    en_min = enH * 60 + enM
+
+    rows = []
+    sess_trades = 0
+    sess_wins = 0
+    sess_losses = 0
+    sess_pnl = 0.0
+    in_window = False
+
+    for i, b in enumerate(bars):
+        ct = b.hour * 60 + b.minute
+        was_in = in_window
+        in_window = ct >= st_min and ct < en_min
+
+        # Session start
+        if in_window and not was_in:
+            sess_trades = 0
+            sess_wins = 0
+            sess_losses = 0
+            sess_pnl = 0.0
+            ts_str = datetime.datetime.fromtimestamp(0, tz=datetime.timezone(datetime.timedelta(hours=1)))
+            # Approximate timestamp from bar index
+            rows.append((i, f"=== SITZUNG START === {name} | {stH}:{stM:02d}-{enH}:{enM:02d} | {ms} | Max:{mt}"))
+
+        # Trade entries
+        if i in entry_at:
+            for t in entry_at[i]:
+                sess_trades += 1
+                d_name = "LONG" if t.d == 'L' else "SHORT"
+                sl_dist = abs(t.ep - t.sl)
+                tp_dist = abs(t.tp - t.ep)
+                rows.append((i, f"{d_name} #{sess_trades} MeanRev @ {t.ep:.2f} | SL: {t.sl:.2f} (-{sl_dist:.1f}) | TP: {t.tp:.2f} (+{tp_dist:.1f})"))
+
+        # Trade exits
+        if i in exit_at:
+            for t in exit_at[i]:
+                result = "WIN" if t.pnl >= 0 else "LOSS"
+                d_name = "LONG" if t.d == 'L' else "SHORT"
+                sess_pnl += t.pnl
+                if t.pnl >= 0:
+                    sess_wins += 1
+                else:
+                    sess_losses += 1
+                rows.append((i, f"   {result} {d_name} | Entry: {t.ep:.2f} Exit: {t.xp:.2f} | PnL: {t.pnl:+.2f} | Gesamt: {sess_pnl:+.2f} [{t.r}]"))
+
+        # Session end
+        if not in_window and was_in:
+            total_st = sess_wins + sess_losses
+            wr = sess_wins / total_st * 100 if total_st > 0 else 0
+            rows.append((i, f"=== SITZUNG ENDE === Trades: {sess_trades} | W:{sess_wins} L:{sess_losses} ({wr:.1f}%) | PnL: {sess_pnl:+.2f}"))
+
+    with open(path, 'w', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['Bar', 'Nachricht'])
+        for bar_idx, msg in rows:
+            w.writerow([bar_idx, msg])
+    print(f"  Pine-Log: {path} ({len(rows)} Eintraege)")
+
 def score(trades):
     if not trades:return -99999,0,0,0,0
     p=pnl(trades);w=sum(1 for t in trades if t.pnl>0);wr=w/len(trades)*100
@@ -327,6 +401,10 @@ PERFORMANCE:
         for i,t in enumerate(trades):
             print(f"  #{i+1:3d} {t.d} bar{t.idx}->bar{t.xi} E={t.ep:.1f} X={t.xp:.1f} PnL={t.pnl:+.1f} {t.r}")
 
+        # Pine-Log CSV generieren
+        generate_pine_log(esh, trades, 'ESH2026', ic, tw, m, nmt, st, sv, tt, tv, mt, tl, ts,
+                         '/home/user/Robin/pine-logs-MT+BB-ESH2026-backtest.csv')
+
         # Cross-val US100
         iu=Ind(us,*ic)
         tu=bt(us,iu,tw[0],tw[1],tw[2],tw[3],m,nmt,st,sv,tt,tv,mt,ap,mp,tl,ts)
@@ -360,6 +438,10 @@ ESH2026: PnL={pe:+.1f} Trades={ne} WR={we:.1f}% PF={pfe:.2f} DD={de:.1f}
 US100:   PnL={pu:+.1f} Trades={nu} WR={wu:.1f}% PF={pfu:.2f} DD={du:.1f}
 TOTAL:   PnL={pe+pu:+.1f}
 """)
+        generate_pine_log(esh, te, 'ESH2026-Combined', ic, tw, m, nmt, st, sv, tt, tv, mt, tl, ts,
+                         '/home/user/Robin/pine-logs-MT+BB-Combined-ESH.csv')
+        generate_pine_log(us, tu, 'US100-Combined', ic, tw, m, nmt, st, sv, tt, tv, mt, tl, ts,
+                         '/home/user/Robin/pine-logs-MT+BB-Combined-US100.csv')
 
 if __name__=='__main__':
     main()
