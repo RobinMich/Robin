@@ -1,15 +1,14 @@
 // =============================================================================
 // Magic Trend + Bollinger Bands | Single Trade Strategie
-// Fuer: ESH2026 / US100 | 1-Minuten-Chart
-// Prinzip: 1 perfekter Trade pro Tag ab 15:30 MEZ
+// Fuer: ES1! / ESH2026 / US100 | 1-Minuten-Chart
+// Prinzip: 1 perfekter Trade pro Tag ab 15:30 MEZ (Breakout)
 // =============================================================================
 //
-// BACKTESTING (Single-Trade, ESH2026, 12 Handelstage, 1min):
+// BACKTESTING (Single-Trade, 12 Handelstage, 1min, OHNE MT-Filter):
 // -----------------------------------------------------------------------
-// PnL: +125.7 Pkt | Trades: 10 | WR: 40% | PF: 3.34 | MaxDD: 26.1
-// Avg Win: +44.8 | Avg Loss: -9.0 | Avg/Trade: +12.6
-// -----------------------------------------------------------------------
-// US100 Cross-Val: +471.3 Pkt | 10 Trades | 40% WR | PF: 2.34
+// ESH2026: +87.7 Pkt | 10 Trades | 40% WR | PF: 2.37 | MaxDD: 27.8
+// US100:  +1145.7 Pkt | 10 Trades | 60% WR | PF: 7.31 | MaxDD: 98.4
+// TOTAL:  +1233.4 Pkt
 // -----------------------------------------------------------------------
 //
 // =============================================================================
@@ -41,29 +40,29 @@ i_tz       = input.string("Europe/Berlin", "Zeitzone",
 i_startH   = input.int(15, "Start Stunde", minval=0, maxval=23, group=GRP_TIME)
 i_startM   = input.int(30, "Start Minute", minval=0, maxval=59, group=GRP_TIME)
 i_endH     = input.int(18, "Ende Stunde", minval=0, maxval=23, group=GRP_TIME)
-i_endM     = input.int(35, "Ende Minute", minval=0, maxval=59, group=GRP_TIME)
+i_endM     = input.int(20, "Ende Minute", minval=0, maxval=59, group=GRP_TIME)
 i_closeEnd = input.bool(true, "Position am Ende schliessen", group=GRP_TIME)
 
 // --- Magic Trend ---
 string GRP_MT = "Magic Trend"
 i_cciLen   = input.int(28, "CCI Periode", minval=5, maxval=50, step=1, group=GRP_MT)
-i_atrLen   = input.int(5, "ATR Periode", minval=3, maxval=30, step=1, group=GRP_MT)
+i_atrLen   = input.int(7, "ATR Periode", minval=3, maxval=30, step=1, group=GRP_MT)
 i_atrMult  = input.float(0.5, "ATR Multiplikator", minval=0.1, maxval=5.0, step=0.1, group=GRP_MT)
 
 // --- Bollinger Bands ---
 string GRP_BB = "Bollinger Bands"
-i_bbLen    = input.int(14, "BB Laenge", minval=5, maxval=50, step=1, group=GRP_BB)
-i_bbMult   = input.float(1.5, "BB Standardabweichung", minval=0.5, maxval=4.0, step=0.1, group=GRP_BB)
+i_bbLen    = input.int(7, "BB Laenge", minval=5, maxval=50, step=1, group=GRP_BB)
+i_bbMult   = input.float(1.0, "BB Standardabweichung", minval=0.5, maxval=4.0, step=0.1, group=GRP_BB)
 i_bbSrc    = input.source(close, "BB Quelle", group=GRP_BB)
 
 // --- Einstiegslogik ---
 string GRP_ENTRY = "Einstiegslogik"
-i_mode     = input.string("Kombiniert", "Einstiegsmodus",
+i_mode     = input.string("Breakout", "Einstiegsmodus",
              options=["Breakout", "Mean Reversion", "Kombiniert"],
              group=GRP_ENTRY,
-             tooltip="Kombiniert: Breakout + Mean Reversion")
-i_needMT   = input.bool(true, "Magic Trend Bestaetigung", group=GRP_ENTRY,
-             tooltip="Nur Long wenn MT bullish")
+             tooltip="Breakout: Kerze schliesst ueber BB")
+i_needMT   = input.bool(false, "Magic Trend Bestaetigung", group=GRP_ENTRY,
+             tooltip="Ohne MT = universell auf allen Assets")
 i_bodyFilt = input.bool(false, "Kerzenkoerper-Filter", group=GRP_ENTRY)
 i_bodyMin  = input.float(0.3, "Min. Koerper/Gesamt Ratio", minval=0.05, maxval=0.9, step=0.05,
              group=GRP_ENTRY)
@@ -74,14 +73,14 @@ i_sqLen    = input.int(50, "Squeeze Lookback", minval=10, maxval=200, step=5, gr
 string GRP_RISK = "Risikomanagement"
 i_slType   = input.string("ATR", "Stop Loss Typ",
              options=["ATR", "Fest (Punkte)", "BB Mitte"], group=GRP_RISK)
-i_slAtr    = input.float(1.7, "SL ATR Multiplikator", minval=0.5, maxval=10.0, step=0.1,
-             group=GRP_RISK, tooltip="Optimiert: 1.74 (enger SL)")
+i_slAtr    = input.float(2.0, "SL ATR Multiplikator", minval=0.5, maxval=10.0, step=0.1,
+             group=GRP_RISK, tooltip="Optimiert: 1.98")
 i_slFix    = input.float(50.0, "SL Feste Punkte", minval=5.0, maxval=500.0, step=5.0,
              group=GRP_RISK)
 i_tpType   = input.string("RR Verhaeltnis", "Take Profit Typ",
              options=["RR Verhaeltnis", "Fest (Punkte)", "Gegenband BB"], group=GRP_RISK)
-i_tpRR     = input.float(7.4, "TP Risk-Reward Verhaeltnis", minval=0.5, maxval=15.0, step=0.1,
-             group=GRP_RISK, tooltip="Optimiert: 7.36 (grosses RR)")
+i_tpRR     = input.float(10.4, "TP Risk-Reward Verhaeltnis", minval=0.5, maxval=15.0, step=0.1,
+             group=GRP_RISK, tooltip="Optimiert: 10.4 (grosses RR, kleine Verluste)")
 i_tpFix    = input.float(72.0, "TP Feste Punkte", minval=5.0, maxval=1000.0, step=1.0,
              group=GRP_RISK)
 i_maxTrades = input.int(1, "Max Trades pro Sitzung", minval=1, maxval=5, step=1,
