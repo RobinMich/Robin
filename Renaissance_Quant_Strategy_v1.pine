@@ -1,0 +1,525 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0
+// © Robin – Renaissance Quantitative Hedge Fund Strategy v1.0
+//@version=6
+strategy("Renaissance Quant Strategy v1.0", overlay=true, pyramiding=0, default_qty_type=strategy.percent_of_equity, default_qty_value=100, initial_capital=10000, commission_type=strategy.commission.percent, commission_value=0.04, slippage=2, calc_on_every_tick=false, process_orders_on_close=false, max_bars_back=5000)
+
+// ═══════════════════════════════════════════════════════════════
+// EINGABE-PARAMETER
+// ═══════════════════════════════════════════════════════════════
+
+grp_regime = "Marktregime-Erkennung"
+adx_len         = input.int(14,    "ADX Länge",              minval=5,  maxval=50,  group=grp_regime)
+adx_trend_th    = input.float(25,  "ADX Trend-Schwelle",     minval=10, maxval=50,  step=1, group=grp_regime)
+adx_strong_th   = input.float(40,  "ADX Starker-Trend",      minval=25, maxval=60,  step=1, group=grp_regime)
+hurst_len       = input.int(100,   "Hurst-Exponent Länge",   minval=50, maxval=300, group=grp_regime)
+vol_regime_len  = input.int(100,   "Vol-Regime Länge",       minval=20, maxval=500, group=grp_regime)
+vol_high_pctl   = input.float(80,  "Hohe Vol Perzentil",     minval=60, maxval=95, step=5, group=grp_regime)
+vol_low_pctl    = input.float(20,  "Niedrige Vol Perzentil", minval=5,  maxval=40, step=5, group=grp_regime)
+
+grp_mr = "Mean Reversion Faktor"
+zscore_len      = input.int(20,    "Z-Score Länge",          minval=10, maxval=100, group=grp_mr)
+zscore_entry    = input.float(2.0, "Z-Score Einstieg",       minval=1.0, maxval=4.0, step=0.1, group=grp_mr)
+zscore_exit     = input.float(0.5, "Z-Score Ausstieg",       minval=0.0, maxval=1.5, step=0.1, group=grp_mr)
+bb_len          = input.int(20,    "Bollinger-Band Länge",   minval=10, maxval=100, group=grp_mr)
+bb_mult         = input.float(2.0, "Bollinger Multiplikator",minval=1.0, maxval=4.0, step=0.1, group=grp_mr)
+
+grp_mom = "Momentum Faktor"
+mom_fast        = input.int(10,    "Momentum Schnell",       minval=3,  maxval=30,  group=grp_mom)
+mom_slow        = input.int(30,    "Momentum Langsam",       minval=15, maxval=100, group=grp_mom)
+rsi_len         = input.int(14,    "RSI Länge",              minval=5,  maxval=30,  group=grp_mom)
+rsi_ob          = input.float(70,  "RSI Überkauft",          minval=60, maxval=90, step=1, group=grp_mom)
+rsi_os          = input.float(30,  "RSI Überverkauft",       minval=10, maxval=40, step=1, group=grp_mom)
+
+grp_trend = "Trend Faktor"
+ema_fast        = input.int(8,     "EMA Schnell",            minval=3,  maxval=30,  group=grp_trend)
+ema_mid         = input.int(21,    "EMA Mittel",             minval=10, maxval=50,  group=grp_trend)
+ema_slow        = input.int(55,    "EMA Langsam",            minval=30, maxval=200, group=grp_trend)
+ema_base        = input.int(200,   "EMA Basis",              minval=100,maxval=500, group=grp_trend)
+
+grp_vol = "Volatilitäts-Breakout Faktor"
+atr_len         = input.int(14,    "ATR Länge",              minval=5,  maxval=50,  group=grp_vol)
+kc_len          = input.int(20,    "Keltner Länge",          minval=10, maxval=50,  group=grp_vol)
+kc_mult         = input.float(1.5, "Keltner Mult",           minval=0.5,maxval=3.0, step=0.1, group=grp_vol)
+squeeze_bb_len  = input.int(20,    "Squeeze BB Länge",       minval=10, maxval=50,  group=grp_vol)
+squeeze_bb_mult = input.float(2.0, "Squeeze BB Mult",        minval=1.0,maxval=4.0, step=0.1, group=grp_vol)
+squeeze_kc_mult = input.float(1.5, "Squeeze KC Mult",        minval=0.5,maxval=3.0, step=0.1, group=grp_vol)
+
+grp_volf = "Volumen-Filter"
+vol_filter_on   = input.bool(true, "Volumen-Filter aktiv",   group=grp_volf)
+vol_ma_len      = input.int(20,    "Volumen-MA Länge",       minval=5,  maxval=100, group=grp_volf)
+vol_threshold   = input.float(1.0, "Volumen-Schwelle",       minval=0.5,maxval=3.0, step=0.1, group=grp_volf)
+
+grp_risk = "Risikomanagement"
+risk_pct        = input.float(1.5, "Risiko pro Trade %",     minval=0.1,maxval=5.0, step=0.1, group=grp_risk)
+atr_sl_mult     = input.float(2.0, "ATR SL Multiplikator",   minval=0.5,maxval=5.0, step=0.1, group=grp_risk)
+atr_tp_mult     = input.float(3.0, "ATR TP Multiplikator",   minval=1.0,maxval=10.0,step=0.1, group=grp_risk)
+use_trailing    = input.bool(true, "Trailing-Stop",          group=grp_risk)
+trail_atr_mult  = input.float(2.5, "Trailing ATR Mult",      minval=1.0,maxval=5.0, step=0.1, group=grp_risk)
+max_dd_pct      = input.float(15,  "Max Drawdown CB %",      minval=5,  maxval=50,  step=1, group=grp_risk)
+cooldown_bars   = input.int(5,     "Cooldown Bars",           minval=0,  maxval=50,  group=grp_risk)
+
+grp_mtf = "Multi-Timeframe"
+use_mtf         = input.bool(true, "MTF-Filter aktiv",       group=grp_mtf)
+htf_period      = input.timeframe("D", "HTF Zeitrahmen",     group=grp_mtf)
+
+grp_dash = "Dashboard"
+show_dashboard  = input.bool(true, "Dashboard anzeigen",     group=grp_dash)
+show_signals    = input.bool(true, "Signal-Pfeile",          group=grp_dash)
+show_zones      = input.bool(true, "SL/TP Zonen",            group=grp_dash)
+
+grp_log = "Pine Protokoll"
+log_enabled     = input.bool(true, "Protokoll aktivieren",   group=grp_log)
+log_regime_chg  = input.bool(true, "Regime-Wechsel loggen",  group=grp_log)
+log_signals_on  = input.bool(true, "Signale loggen",         group=grp_log)
+log_orders_on   = input.bool(true, "Orders loggen",          group=grp_log)
+log_risk_on     = input.bool(true, "Risiko loggen",          group=grp_log)
+log_factors_on  = input.bool(false,"Faktoren loggen (jeder Bar)", group=grp_log)
+
+// ═══════════════════════════════════════════════════════════════
+// GLOBALE HILFSFUNKTIONEN (muessen im globalen Scope stehen!)
+// ═══════════════════════════════════════════════════════════════
+
+hurst_calc(src, length) =>
+    half = math.floor(length / 2)
+    fullVariance = ta.variance(src, length)
+    halfVariance = ta.variance(src, half)
+    ratio = fullVariance > 0 and halfVariance > 0 ? math.log(fullVariance / halfVariance) / math.log(2.0) : 0.5
+    math.max(0.0, math.min(1.0, ratio / 2.0))
+
+score_bg(score) =>
+    score > 30 ? color.new(color.green, 40) : score < -30 ? color.new(color.red, 40) : color.new(color.gray, 50)
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 1: MARKTREGIME-ERKENNUNG
+// ═══════════════════════════════════════════════════════════════
+
+atr_val = ta.atr(atr_len)
+[di_plus, di_minus, adx_val] = ta.dmi(adx_len, adx_len)
+hurst_val = hurst_calc(close, hurst_len)
+
+atr_normalized = atr_val / close * 100
+vol_pctl_hi = ta.percentile_linear_interpolation(atr_normalized, vol_regime_len, vol_high_pctl)
+vol_pctl_lo = ta.percentile_linear_interpolation(atr_normalized, vol_regime_len, vol_low_pctl)
+is_high_vol = atr_normalized > vol_pctl_hi
+is_low_vol  = atr_normalized < vol_pctl_lo
+
+var int regime = 3
+if is_high_vol and adx_val > adx_strong_th
+    regime := 1
+else if adx_val > adx_trend_th
+    regime := 2
+else if hurst_val < 0.45 and not is_high_vol
+    regime := 3
+else if is_high_vol
+    regime := 4
+else if is_low_vol
+    regime := 5
+else
+    regime := 3
+
+regime_str = regime == 1 ? "STARKER TREND" : regime == 2 ? "TREND" : regime == 3 ? "MEAN REVERSION" : regime == 4 ? "HOHE VOLATILITÄT" : regime == 5 ? "SQUEEZE" : "UNBEKANNT"
+
+// Protokoll: Regime-Wechsel
+var int prev_regime = 3
+if log_enabled and log_regime_chg and regime != prev_regime
+    prev_r_str = prev_regime == 1 ? "STARKER TREND" : prev_regime == 2 ? "TREND" : prev_regime == 3 ? "MEAN REVERSION" : prev_regime == 4 ? "HOHE VOL" : prev_regime == 5 ? "SQUEEZE" : "?"
+    log.info("========================================")
+    log.info("REGIME-WECHSEL: {0} -> {1}", prev_r_str, regime_str)
+    log.info("ADX={0} | Hurst={1} | ATR%={2}", str.tostring(adx_val, "#.##"), str.tostring(hurst_val, "#.###"), str.tostring(atr_normalized, "#.###"))
+    log.info("========================================")
+prev_regime := regime
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 2: ADAPTIVE FAKTOR-GEWICHTUNG
+// ═══════════════════════════════════════════════════════════════
+
+var float w_mr    = 25.0
+var float w_mom   = 25.0
+var float w_trend = 30.0
+var float w_vol   = 20.0
+
+if regime == 1
+    w_trend := 45.0
+    w_mom   := 35.0
+    w_mr    := 5.0
+    w_vol   := 15.0
+else if regime == 2
+    w_trend := 35.0
+    w_mom   := 30.0
+    w_mr    := 15.0
+    w_vol   := 20.0
+else if regime == 3
+    w_trend := 10.0
+    w_mom   := 15.0
+    w_mr    := 55.0
+    w_vol   := 20.0
+else if regime == 4
+    w_trend := 20.0
+    w_mom   := 20.0
+    w_mr    := 30.0
+    w_vol   := 30.0
+else if regime == 5
+    w_trend := 20.0
+    w_mom   := 15.0
+    w_mr    := 15.0
+    w_vol   := 50.0
+
+w_total   = w_mr + w_mom + w_trend + w_vol
+w_mr_n    = w_mr / w_total
+w_mom_n   = w_mom / w_total
+w_trend_n = w_trend / w_total
+w_vol_n   = w_vol / w_total
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 3: FAKTOR-BERECHNUNGEN
+// ═══════════════════════════════════════════════════════════════
+
+// 3a. Mean Reversion
+zscore_mean = ta.sma(close, zscore_len)
+zscore_std  = ta.stdev(close, zscore_len)
+zscore      = zscore_std != 0 ? (close - zscore_mean) / zscore_std : 0.0
+
+[bb_mid, bb_up, bb_lo] = ta.bb(close, bb_len, bb_mult)
+bb_pct = (bb_up - bb_lo) != 0 ? (close - bb_lo) / (bb_up - bb_lo) : 0.5
+
+mr_zscore_signal = -zscore / zscore_entry * 100
+mr_bb_signal     = -(bb_pct - 0.5) * 200
+mr_score         = math.avg(mr_zscore_signal, mr_bb_signal)
+mr_score_clamped = math.max(-100.0, math.min(100.0, mr_score))
+
+// 3b. Momentum
+roc_fast = ta.roc(close, mom_fast)
+roc_slow = ta.roc(close, mom_slow)
+rsi_val  = ta.rsi(close, rsi_len)
+
+mom_roc_raw = roc_fast > 0 and roc_slow > 0 ? math.min(100.0, (roc_fast + roc_slow) * 5) : roc_fast < 0 and roc_slow < 0 ? math.max(-100.0, (roc_fast + roc_slow) * 5) : (roc_fast + roc_slow) * 3
+mom_rsi_signal   = (rsi_val - 50) * 2
+mom_score        = math.avg(mom_roc_raw, mom_rsi_signal)
+mom_score_clamped = math.max(-100.0, math.min(100.0, mom_score))
+
+// 3c. Trend
+ema_f = ta.ema(close, ema_fast)
+ema_m = ta.ema(close, ema_mid)
+ema_s = ta.ema(close, ema_slow)
+ema_b = ta.ema(close, ema_base)
+
+bull_order = ema_f > ema_m and ema_m > ema_s and ema_s > ema_b ? 1.0 : ema_f > ema_m and ema_m > ema_s ? 0.66 : ema_f > ema_m ? 0.33 : 0.0
+bear_order = ema_f < ema_m and ema_m < ema_s and ema_s < ema_b ? 1.0 : ema_f < ema_m and ema_m < ema_s ? 0.66 : ema_f < ema_m ? 0.33 : 0.0
+
+price_vs_ema = (close > ema_f ? 1.0 : 0.0) + (close > ema_m ? 1.0 : 0.0) + (close > ema_s ? 1.0 : 0.0) + (close > ema_b ? 1.0 : 0.0)
+
+trend_order_sig = (bull_order - bear_order) * 100
+trend_price_sig = (price_vs_ema - 2.0) * 50
+trend_adx_w     = math.min(adx_val / 50.0, 1.0)
+trend_score        = math.avg(trend_order_sig, trend_price_sig) * trend_adx_w
+trend_score_clamped = math.max(-100.0, math.min(100.0, trend_score))
+
+// 3d. Volatilitäts-Breakout
+sq_bb_upper = ta.sma(close, squeeze_bb_len) + ta.stdev(close, squeeze_bb_len) * squeeze_bb_mult
+sq_bb_lower = ta.sma(close, squeeze_bb_len) - ta.stdev(close, squeeze_bb_len) * squeeze_bb_mult
+kc_basis = ta.ema(close, kc_len)
+kc_upper = kc_basis + atr_val * squeeze_kc_mult
+kc_lower = kc_basis - atr_val * squeeze_kc_mult
+
+is_squeeze    = sq_bb_lower > kc_lower and sq_bb_upper < kc_upper
+squeeze_fired = is_squeeze[1] and not is_squeeze
+
+hh_val = ta.highest(high, kc_len)
+ll_val = ta.lowest(low, kc_len)
+linreg_src = close - math.avg(math.avg(hh_val, ll_val), kc_basis)
+linreg_val = ta.linreg(linreg_src, kc_len, 0)
+
+vol_sq_sig = squeeze_fired ? (linreg_val > 0 ? 80.0 : -80.0) : is_squeeze ? (linreg_val > 0 ? 40.0 : -40.0) : 0.0
+vol_bo_sig = close > kc_upper ? 60.0 : close < kc_lower ? -60.0 : 0.0
+vol_score = math.avg(vol_sq_sig, vol_bo_sig)
+vol_score_clamped = math.max(-100.0, math.min(100.0, vol_score))
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 4: COMPOSITE SIGNAL
+// ═══════════════════════════════════════════════════════════════
+
+composite = mr_score_clamped * w_mr_n + mom_score_clamped * w_mom_n + trend_score_clamped * w_trend_n + vol_score_clamped * w_vol_n
+composite_smooth = ta.ema(composite, 3)
+
+if log_enabled and log_factors_on
+    log.info("MR={0}({1}%) MOM={2}({3}%) TR={4}({5}%) VOL={6}({7}%) COMP={8}", str.tostring(mr_score_clamped, "#.#"), str.tostring(w_mr_n * 100, "#"), str.tostring(mom_score_clamped, "#.#"), str.tostring(w_mom_n * 100, "#"), str.tostring(trend_score_clamped, "#.#"), str.tostring(w_trend_n * 100, "#"), str.tostring(vol_score_clamped, "#.#"), str.tostring(w_vol_n * 100, "#"), str.tostring(composite_smooth, "#.##"))
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 5: VOLUMEN + MTF BESTÄTIGUNG
+// ═══════════════════════════════════════════════════════════════
+
+vol_ma = ta.sma(volume, vol_ma_len)
+vol_confirmed = not vol_filter_on or volume > vol_ma * vol_threshold or na(volume) or volume == 0
+
+htf_ema_f = request.security(syminfo.tickerid, htf_period, ta.ema(close, ema_fast))
+htf_ema_s = request.security(syminfo.tickerid, htf_period, ta.ema(close, ema_slow))
+htf_rsi   = request.security(syminfo.tickerid, htf_period, ta.rsi(close, rsi_len))
+
+htf_bullish  = htf_ema_f > htf_ema_s and htf_rsi > 40
+htf_bearish  = htf_ema_f < htf_ema_s and htf_rsi < 60
+mtf_long_ok  = not use_mtf or htf_bullish
+mtf_short_ok = not use_mtf or htf_bearish
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 6: RISIKOMANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+equity_high   = ta.highest(strategy.equity, 500)
+current_dd    = (equity_high - strategy.equity) / equity_high * 100
+circuit_break = current_dd > max_dd_pct
+
+// Cooldown (globale var statt lokale – behebt history[] Fehler)
+var int bars_since_loss = 999
+var float prev_trade_pnl = 0.0
+cur_trade_cnt = strategy.closedtrades
+cur_last_pnl  = cur_trade_cnt > 0 ? strategy.closedtrades.profit(cur_trade_cnt - 1) : 0.0
+if cur_trade_cnt > 0 and cur_last_pnl < 0 and prev_trade_pnl >= 0
+    bars_since_loss := 0
+prev_trade_pnl := cur_last_pnl
+bars_since_loss := bars_since_loss + 1
+cooldown_active = bars_since_loss < cooldown_bars
+
+// Positionsgroesse
+regime_risk_f  = regime == 1 ? 1.0 : regime == 2 ? 1.0 : regime == 3 ? 0.8 : regime == 4 ? 0.5 : 0.7
+sig_strength   = math.abs(composite_smooth) / 100
+sig_risk_f     = 0.5 + sig_strength * 0.5
+eff_risk       = risk_pct * regime_risk_f * sig_risk_f
+
+sl_mult_adp    = regime == 1 ? atr_sl_mult * 1.2 : regime == 2 ? atr_sl_mult : regime == 3 ? atr_sl_mult * 0.8 : regime == 4 ? atr_sl_mult * 1.5 : atr_sl_mult * 0.9
+sl_distance    = atr_val * sl_mult_adp
+
+risk_amount    = strategy.equity * (eff_risk / 100)
+pos_size       = sl_distance > 0 ? math.max(0.0, risk_amount / sl_distance) : 0.0
+
+tp_rr          = regime == 1 ? atr_tp_mult * 1.5 : regime == 2 ? atr_tp_mult * 1.2 : regime == 3 ? atr_tp_mult * 0.8 : regime == 4 ? atr_tp_mult : atr_tp_mult * 1.3
+tp_distance    = atr_val * tp_rr
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 7: ENTRY / EXIT SIGNALE
+// ═══════════════════════════════════════════════════════════════
+
+entry_th = regime == 1 ? 25.0 : regime == 2 ? 30.0 : regime == 3 ? 35.0 : regime == 4 ? 45.0 : 30.0
+exit_th  = 5.0
+
+long_signal   = composite_smooth > entry_th
+long_confirm  = vol_confirmed and mtf_long_ok
+long_entry    = long_signal and long_confirm and not circuit_break and not cooldown_active
+long_exit     = composite_smooth < exit_th and composite_smooth < composite_smooth[1]
+
+short_signal  = composite_smooth < -entry_th
+short_confirm = vol_confirmed and mtf_short_ok
+short_entry   = short_signal and short_confirm and not circuit_break and not cooldown_active
+short_exit    = composite_smooth > -exit_th and composite_smooth > composite_smooth[1]
+
+// Protokoll: Signal
+if log_enabled and log_signals_on and long_signal and strategy.position_size == 0
+    log.info("LONG SIGNAL: Comp={0} > {1} | Vol={2} MTF={3} CB={4} CD={5}", str.tostring(composite_smooth, "#.##"), str.tostring(entry_th, "#"), vol_confirmed ? "OK" : "X", mtf_long_ok ? "OK" : "X", circuit_break ? "X" : "OK", cooldown_active ? "X" : "OK")
+
+if log_enabled and log_signals_on and short_signal and strategy.position_size == 0
+    log.info("SHORT SIGNAL: Comp={0} < -{1} | Vol={2} MTF={3} CB={4} CD={5}", str.tostring(composite_smooth, "#.##"), str.tostring(entry_th, "#"), vol_confirmed ? "OK" : "X", mtf_short_ok ? "OK" : "X", circuit_break ? "X" : "OK", cooldown_active ? "X" : "OK")
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 8: ORDER-AUSFÜHRUNG
+// ═══════════════════════════════════════════════════════════════
+
+var float entry_price = na
+var float stop_price  = na
+var float tp_price    = na
+var float trail_price = na
+
+// Long Entry
+if long_entry and strategy.position_size == 0
+    entry_price := close
+    stop_price  := close - sl_distance
+    tp_price    := close + tp_distance
+    trail_price := close - atr_val * trail_atr_mult
+    strategy.entry("Long", strategy.long, qty=pos_size)
+    strategy.exit("Long TP/SL", "Long", stop=stop_price, limit=tp_price)
+    if log_enabled and log_orders_on
+        log.info("========================================")
+        log.info(">> LONG ORDER platziert")
+        log.info("Equity={0} | Risk%={1} | Risk$={2}", str.tostring(strategy.equity, "#.##"), str.tostring(eff_risk, "#.##"), str.tostring(risk_amount, "#.##"))
+        log.info("Entry={0} | SL={1} | TP={2}", str.tostring(close, "#.#####"), str.tostring(stop_price, "#.#####"), str.tostring(tp_price, "#.#####"))
+        log.info("SL-Dist={0} | TP-Dist={1} | RR={2}", str.tostring(sl_distance, "#.#####"), str.tostring(tp_distance, "#.#####"), str.tostring(tp_distance / sl_distance, "#.##"))
+        log.info("Qty={0} | Regime={1} | ATR={2}", str.tostring(pos_size, "#.######"), regime_str, str.tostring(atr_val, "#.#####"))
+        log.info("========================================")
+
+// Short Entry
+if short_entry and strategy.position_size == 0
+    entry_price := close
+    stop_price  := close + sl_distance
+    tp_price    := close - tp_distance
+    trail_price := close + atr_val * trail_atr_mult
+    strategy.entry("Short", strategy.short, qty=pos_size)
+    strategy.exit("Short TP/SL", "Short", stop=stop_price, limit=tp_price)
+    if log_enabled and log_orders_on
+        log.info("========================================")
+        log.info(">> SHORT ORDER platziert")
+        log.info("Equity={0} | Risk%={1} | Risk$={2}", str.tostring(strategy.equity, "#.##"), str.tostring(eff_risk, "#.##"), str.tostring(risk_amount, "#.##"))
+        log.info("Entry={0} | SL={1} | TP={2}", str.tostring(close, "#.#####"), str.tostring(stop_price, "#.#####"), str.tostring(tp_price, "#.#####"))
+        log.info("SL-Dist={0} | TP-Dist={1} | RR={2}", str.tostring(sl_distance, "#.#####"), str.tostring(tp_distance, "#.#####"), str.tostring(tp_distance / sl_distance, "#.##"))
+        log.info("Qty={0} | Regime={1} | ATR={2}", str.tostring(pos_size, "#.######"), regime_str, str.tostring(atr_val, "#.#####"))
+        log.info("========================================")
+
+// Trailing Stop
+if use_trailing and strategy.position_size > 0
+    new_trail = close - atr_val * trail_atr_mult
+    if new_trail > trail_price
+        trail_price := new_trail
+        if trail_price > stop_price
+            stop_price := trail_price
+            strategy.exit("Long TP/SL", "Long", stop=trail_price, limit=tp_price)
+            if log_enabled and log_orders_on
+                log.info("TRAILING SL Long -> {0}", str.tostring(trail_price, "#.#####"))
+
+if use_trailing and strategy.position_size < 0
+    new_trail = close + atr_val * trail_atr_mult
+    if new_trail < trail_price
+        trail_price := new_trail
+        if trail_price < stop_price
+            stop_price := trail_price
+            strategy.exit("Short TP/SL", "Short", stop=trail_price, limit=tp_price)
+            if log_enabled and log_orders_on
+                log.info("TRAILING SL Short -> {0}", str.tostring(trail_price, "#.#####"))
+
+// Signal Exit
+if long_exit and strategy.position_size > 0
+    strategy.close("Long", comment="Signal Exit")
+    if log_enabled and log_orders_on
+        log.info("LONG SIGNAL EXIT | Comp={0}", str.tostring(composite_smooth, "#.##"))
+
+if short_exit and strategy.position_size < 0
+    strategy.close("Short", comment="Signal Exit")
+    if log_enabled and log_orders_on
+        log.info("SHORT SIGNAL EXIT | Comp={0}", str.tostring(composite_smooth, "#.##"))
+
+// Circuit Breaker
+if circuit_break and strategy.position_size != 0
+    strategy.close_all(comment="CIRCUIT BREAKER")
+    if log_enabled and log_risk_on
+        log.info("!! CIRCUIT BREAKER !! DD={0}% > Max={1}%", str.tostring(current_dd, "#.##"), str.tostring(max_dd_pct, "#"))
+
+// Trade-Ergebnis protokollieren
+var int logged_trades = 0
+if log_enabled and log_orders_on and strategy.closedtrades > logged_trades
+    t_idx     = strategy.closedtrades - 1
+    t_profit  = strategy.closedtrades.profit(t_idx)
+    t_entry   = strategy.closedtrades.entry_price(t_idx)
+    t_exit    = strategy.closedtrades.exit_price(t_idx)
+    t_sz      = strategy.closedtrades.size(t_idx)
+    t_bars    = strategy.closedtrades.exit_bar_index(t_idx) - strategy.closedtrades.entry_bar_index(t_idx)
+    t_pct     = t_entry != 0 ? t_profit / (math.abs(t_sz) * t_entry) * 100 : 0.0
+    log.info("---- Trade #{0} Ergebnis ----", str.tostring(strategy.closedtrades))
+    log.info("{0} | {1} Bars | Entry={2} | Exit={3}", t_sz > 0 ? "LONG" : "SHORT", str.tostring(t_bars), str.tostring(t_entry, "#.#####"), str.tostring(t_exit, "#.#####"))
+    log.info("P/L={0} ({1}%) | Equity={2}", str.tostring(t_profit, "#.##"), str.tostring(t_pct, "#.##"), str.tostring(strategy.equity, "#.##"))
+    logged_trades := strategy.closedtrades
+
+// Cooldown + Squeeze Protokoll
+if log_enabled and log_risk_on and cooldown_active and bars_since_loss == 1
+    log.info("COOLDOWN aktiv: {0} Bars Pause", str.tostring(cooldown_bars))
+
+if log_enabled and log_signals_on and squeeze_fired
+    log.info("SQUEEZE FIRED! Richtung: {0}", linreg_val > 0 ? "BULLISH" : "BEARISH")
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 9: VISUALISIERUNG
+// ═══════════════════════════════════════════════════════════════
+
+p_ef = plot(ema_f, "EMA Schnell",  color=color.new(color.blue, 60),   linewidth=1)
+p_em = plot(ema_m, "EMA Mittel",   color=color.new(color.orange, 60), linewidth=1)
+p_es = plot(ema_s, "EMA Langsam",  color=color.new(color.red, 60),    linewidth=1)
+p_eb = plot(ema_b, "EMA Basis",    color=color.new(color.gray, 60),   linewidth=2)
+
+fill(p_ef, p_em, color=ema_f > ema_m ? color.new(color.green, 90) : color.new(color.red, 90))
+fill(p_em, p_es, color=ema_m > ema_s ? color.new(color.green, 93) : color.new(color.red, 93))
+
+plot(bb_up, "BB Oben",  color=color.new(color.purple, 80), linewidth=1, style=plot.style_circles)
+plot(bb_lo, "BB Unten", color=color.new(color.purple, 80), linewidth=1, style=plot.style_circles)
+
+regime_clr = regime == 1 ? color.new(color.green, 92) : regime == 2 ? color.new(color.lime, 94) : regime == 3 ? color.new(color.blue, 94) : regime == 4 ? color.new(color.red, 92) : color.new(color.yellow, 93)
+bgcolor(regime_clr, title="Regime BG")
+
+plotshape(show_signals and long_entry and strategy.position_size[1] == 0 ? low : na, title="Long", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.normal, text="LONG")
+plotshape(show_signals and short_entry and strategy.position_size[1] == 0 ? high : na, title="Short", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.normal, text="SHORT")
+
+plot(show_zones and strategy.position_size > 0 ? stop_price : na, "L-SL", color=color.red, linewidth=1, style=plot.style_linebr)
+plot(show_zones and strategy.position_size > 0 ? tp_price : na, "L-TP", color=color.green, linewidth=1, style=plot.style_linebr)
+plot(show_zones and strategy.position_size < 0 ? stop_price : na, "S-SL", color=color.red, linewidth=1, style=plot.style_linebr)
+plot(show_zones and strategy.position_size < 0 ? tp_price : na, "S-TP", color=color.green, linewidth=1, style=plot.style_linebr)
+plot(show_zones and use_trailing and strategy.position_size != 0 ? trail_price : na, "Trail", color=color.orange, linewidth=1, style=plot.style_linebr)
+
+bgcolor(circuit_break ? color.new(color.red, 80) : na, title="CB Warning")
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 10: DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+
+var table dash = table.new(position.top_right, 2, 16, bgcolor=color.new(color.black, 20), border_width=1, border_color=color.new(color.gray, 50), frame_width=2, frame_color=color.new(color.white, 70))
+
+if show_dashboard and barstate.islast
+    table.cell(dash, 0, 0, "RENAISSANCE QUANT", bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.normal)
+    table.cell(dash, 1, 0, "v1.0", bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.normal)
+
+    r_bg = regime == 1 ? color.new(color.green, 30) : regime == 2 ? color.new(color.lime, 40) : regime == 3 ? color.new(color.blue, 40) : regime == 4 ? color.new(color.red, 30) : color.new(color.yellow, 40)
+    table.cell(dash, 0, 1, "Regime", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 1, regime_str, bgcolor=r_bg, text_color=color.white, text_size=size.small)
+
+    h_bg = hurst_val > 0.55 ? color.new(color.green, 40) : hurst_val < 0.45 ? color.new(color.blue, 40) : color.new(color.gray, 40)
+    table.cell(dash, 0, 2, "Hurst", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 2, str.tostring(hurst_val, "#.###"), bgcolor=h_bg, text_color=color.white, text_size=size.small)
+
+    a_bg = adx_val > adx_strong_th ? color.new(color.green, 30) : adx_val > adx_trend_th ? color.new(color.lime, 40) : color.new(color.gray, 50)
+    table.cell(dash, 0, 3, "ADX", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 3, str.tostring(adx_val, "#.#"), bgcolor=a_bg, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 4, "-- Faktoren --", text_color=color.yellow, text_size=size.small)
+    table.cell(dash, 1, 4, "Score (Gewicht)", text_color=color.yellow, text_size=size.small)
+
+    table.cell(dash, 0, 5, "Mean Rev.", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 5, str.tostring(mr_score_clamped, "#.#") + " (" + str.tostring(w_mr_n * 100, "#") + "%)", bgcolor=score_bg(mr_score_clamped), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 6, "Momentum", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 6, str.tostring(mom_score_clamped, "#.#") + " (" + str.tostring(w_mom_n * 100, "#") + "%)", bgcolor=score_bg(mom_score_clamped), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 7, "Trend", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 7, str.tostring(trend_score_clamped, "#.#") + " (" + str.tostring(w_trend_n * 100, "#") + "%)", bgcolor=score_bg(trend_score_clamped), text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 8, "Volatilität", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 8, str.tostring(vol_score_clamped, "#.#") + " (" + str.tostring(w_vol_n * 100, "#") + "%)", bgcolor=score_bg(vol_score_clamped), text_color=color.white, text_size=size.small)
+
+    c_bg = composite_smooth > entry_th ? color.new(color.green, 20) : composite_smooth < -entry_th ? color.new(color.red, 20) : color.new(color.gray, 40)
+    table.cell(dash, 0, 9, "COMPOSITE", text_color=color.white, text_size=size.normal)
+    table.cell(dash, 1, 9, str.tostring(composite_smooth, "#.#"), bgcolor=c_bg, text_color=color.white, text_size=size.normal)
+
+    table.cell(dash, 0, 10, "-- Risiko --", text_color=color.yellow, text_size=size.small)
+    table.cell(dash, 1, 10, "", text_color=color.yellow, text_size=size.small)
+
+    table.cell(dash, 0, 11, "Eff. Risiko", text_color=color.white, text_size=size.small)
+    table.cell(dash, 1, 11, str.tostring(eff_risk, "#.##") + "%", text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 12, "Position", text_color=color.white, text_size=size.small)
+    p_str = strategy.position_size > 0 ? "LONG " + str.tostring(strategy.position_size, "#.##") : strategy.position_size < 0 ? "SHORT " + str.tostring(math.abs(strategy.position_size), "#.##") : "FLAT"
+    p_bg = strategy.position_size > 0 ? color.new(color.green, 40) : strategy.position_size < 0 ? color.new(color.red, 40) : color.new(color.gray, 50)
+    table.cell(dash, 1, 12, p_str, bgcolor=p_bg, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 13, "Drawdown", text_color=color.white, text_size=size.small)
+    d_bg = current_dd > max_dd_pct * 0.7 ? color.new(color.red, 30) : current_dd > max_dd_pct * 0.4 ? color.new(color.orange, 40) : color.new(color.green, 50)
+    table.cell(dash, 1, 13, str.tostring(current_dd, "#.#") + "%", bgcolor=d_bg, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 14, "Squeeze", text_color=color.white, text_size=size.small)
+    s_bg = is_squeeze ? color.new(color.orange, 30) : color.new(color.gray, 60)
+    table.cell(dash, 1, 14, is_squeeze ? "AKTIV" : "-", bgcolor=s_bg, text_color=color.white, text_size=size.small)
+
+    table.cell(dash, 0, 15, "Circuit Break", text_color=color.white, text_size=size.small)
+    cb_bg = circuit_break ? color.new(color.red, 10) : color.new(color.green, 60)
+    table.cell(dash, 1, 15, circuit_break ? "AKTIV" : "OK", bgcolor=cb_bg, text_color=color.white, text_size=size.small)
+
+// ═══════════════════════════════════════════════════════════════
+// MODUL 11: ALERTS
+// ═══════════════════════════════════════════════════════════════
+
+alertcondition(long_entry and strategy.position_size[1] == 0, title="Long Entry", message="RQ: LONG Entry")
+alertcondition(short_entry and strategy.position_size[1] == 0, title="Short Entry", message="RQ: SHORT Entry")
+alertcondition(circuit_break, title="Circuit Breaker", message="RQ: CIRCUIT BREAKER!")
+alertcondition(squeeze_fired, title="Squeeze Fired", message="RQ: SQUEEZE!")
+alertcondition(regime != regime[1], title="Regime Change", message="RQ: Regime-Wechsel!")
