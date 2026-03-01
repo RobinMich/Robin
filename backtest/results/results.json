@@ -1,0 +1,27 @@
+{
+  "total_trades": 171,
+  "winners": 85,
+  "losers": 86,
+  "win_rate": 49.71,
+  "avg_win": 2968.81,
+  "avg_loss": -1339.96,
+  "avg_rr": 0.58,
+  "median_rr": 0.0,
+  "best_trade_rr": 9.3,
+  "worst_trade_rr": -1.01,
+  "total_pnl": 137112.08,
+  "total_return_pct": 137.11,
+  "profit_factor": 2.19,
+  "expectancy": 801.83,
+  "max_drawdown": -25533.8,
+  "max_drawdown_pct": -16.76,
+  "initial_capital": 100000.0,
+  "final_capital": 236364.34,
+  "avg_hold_hours": 0.0,
+  "max_consec_wins": "12",
+  "max_consec_losses": "8",
+  "exit_reasons": {
+    "stop_loss": 147,
+    "breakeven": 24
+  }
+}
