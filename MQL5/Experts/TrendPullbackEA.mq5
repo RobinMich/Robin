@@ -16,6 +16,12 @@
 //|   Max DD: -35% | Expectancy: $951/trade                          |
 //|   Best on: STX (65%WR), MU (67%WR), LLY (61%WR)                |
 //|   Monte Carlo: 100% profit prob, 0.3% ruin risk                 |
+//|                                                                   |
+//| XAUUSD (Gold) - use these overrides on the XAUUSD chart:        |
+//|   EMA: 13/34/89 | ADX: 10/8 | BBW: 60% | Donchian: 10          |
+//|   PB Buffer: 2.0 ATR | Volume: 1.0 | BullishBar: false          |
+//|   Trail Start: 1.2 RR | Max Pos: 3                              |
+//|   Result: 269 trades, PF 1.35, +37% return, -24% MaxDD          |
 //+------------------------------------------------------------------+
 #property copyright "TrendPullbackEA"
 #property version   "1.00"

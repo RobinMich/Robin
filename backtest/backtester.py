@@ -876,7 +876,8 @@ def print_results(results, title="BACKTEST RESULTS"):
 ALL_SYMBOLS = [
     "AAPL", "AMD", "AMZN", "AVGO", "GOOG", "META", "MSFT", "NVDA", "TSLA",
     "US100", "US500", "WMT", "WDC", "MU", "PLTR", "SAP", "RHM", "STX",
-    "BAC", "GS", "AXP", "LLY", "COST", "XOM", "CAT", "CSCO", "SIEGY", "TJX"
+    "BAC", "GS", "AXP", "LLY", "COST", "XOM", "CAT", "CSCO", "SIEGY", "TJX",
+    "XAUUSD"
 ]
 
 
