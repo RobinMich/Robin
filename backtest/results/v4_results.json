@@ -1,0 +1,49 @@
+{
+  "strategy_name": "TrendPullbackEA",
+  "version": "4.0_PROFIT_MAXIMIZED",
+  "performance": {
+    "total_trades": 1096,
+    "long_trades": 1096,
+    "short_trades": 0,
+    "winners": 433,
+    "losers": 663,
+    "win_rate": 39.51,
+    "avg_win": 10074.58,
+    "avg_loss": -4296.68,
+    "avg_rr": 0.29,
+    "median_rr": -0.0,
+    "best_trade_rr": 10.64,
+    "worst_trade_rr": -1.04,
+    "total_pnl": 1513596.76,
+    "total_return_pct": 1513.6,
+    "profit_factor": 1.53,
+    "expectancy": 1381.02,
+    "max_drawdown": -235536.03,
+    "max_drawdown_pct": -22.23,
+    "initial_capital": 100000.0,
+    "final_capital": 1505087.17,
+    "avg_hold_hours": 0.0,
+    "max_consec_wins": "11",
+    "max_consec_losses": "22",
+    "exit_reasons": {
+      "stop_loss": 725,
+      "breakeven": 370,
+      "end_of_data": 1
+    },
+    "tp1_count": 337,
+    "tp2_count": 139,
+    "avg_momentum_score": 66.5,
+    "long_win_rate": 39.51,
+    "long_pnl": 1513596.76
+  },
+  "symbols_trading": [
+    "AAPL",
+    "WMT",
+    "WDC",
+    "MU",
+    "STX",
+    "LLY",
+    "COST",
+    "XAUUSD"
+  ]
+}

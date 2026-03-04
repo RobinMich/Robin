@@ -131,16 +131,19 @@ class StrategyParams:
 # ASSET PRESETS
 # ============================================================
 def get_xauusd_params():
-    """Optimized parameters for XAUUSD (Gold)."""
+    """Optimized parameters for XAUUSD (Gold).
+    Uses W1 context / D1 validation / H1 entry for maximum precision.
+    """
     return StrategyParams(
+        # Wider EMAs for W1 context stability
         ema_fast=13, ema_mid=34, ema_slow=89,
-        adx_threshold_context=12.0,
+        adx_threshold_context=10.0,    # Lower - gold trends broadly
         adx_threshold_validation=8.0,
-        atr_sl_multiplier=2.0,
-        atr_trail_multiplier=2.5,
-        bbw_squeeze_percentile=55.0,
+        atr_sl_multiplier=2.0,         # Wider SL for gold volatility
+        atr_trail_multiplier=2.5,      # Wider trail
+        bbw_squeeze_percentile=60.0,   # More squeeze opportunities
         donchian_period=10,
-        pb_atr_buffer=2.0,
+        pb_atr_buffer=2.5,             # Wider pullback zone for gold
         be_mode='pullback',
         be_rr_ratio=1.5,
         trail_start_rr=1.5,
@@ -148,20 +151,19 @@ def get_xauusd_params():
         require_bullish_bar=False,
         direction='both',
         rsi_enabled=True,
-        rsi_long_max=60.0,
-        rsi_short_min=40.0,
-        supertrend_enabled=True,
-        st_period=10,
-        st_multiplier=2.0,
-        session_enabled=True,
+        rsi_long_max=78.0,
+        rsi_short_min=22.0,
+        rsi_ob_level=80.0,
+        rsi_os_level=20.0,
+        supertrend_enabled=False,
+        session_enabled=False,
         partial_tp_enabled=True,
         tp1_fraction=0.4, tp1_rr=1.5,
         tp2_fraction=0.3, tp2_rr=3.0,
         dyn_risk_enabled=True,
         mom_score_enabled=True,
-        mom_score_min=55,
-        equity_filter_enabled=True,
-        equity_filter_period=50,
+        mom_score_min=35,              # Lower for gold - fewer signals
+        equity_filter_enabled=False,
     )
 
 
@@ -183,9 +185,11 @@ def get_stocks_params():
         require_bullish_bar=False,
         direction='both',
         rsi_enabled=True,
-        rsi_long_max=65.0,
-        rsi_short_min=35.0,
-        supertrend_enabled=True,
+        rsi_long_max=78.0,    # Higher threshold - breakouts have high RSI
+        rsi_short_min=22.0,
+        rsi_ob_level=80.0,
+        rsi_os_level=20.0,
+        supertrend_enabled=False,  # Disable - conflicts with pullback entries
         st_period=12,
         st_multiplier=2.5,
         session_enabled=False,
@@ -194,9 +198,9 @@ def get_stocks_params():
         tp2_fraction=0.3, tp2_rr=3.0,
         dyn_risk_enabled=True,
         mom_score_enabled=True,
-        mom_score_min=60,
-        equity_filter_enabled=True,
-        equity_filter_period=50,
+        mom_score_min=40,
+        equity_filter_enabled=False,
+        equity_filter_period=200,
     )
 
 
@@ -218,9 +222,11 @@ def get_indices_params():
         require_bullish_bar=False,
         direction='both',
         rsi_enabled=True,
-        rsi_long_max=65.0,
-        rsi_short_min=35.0,
-        supertrend_enabled=True,
+        rsi_long_max=78.0,
+        rsi_short_min=22.0,
+        rsi_ob_level=80.0,
+        rsi_os_level=20.0,
+        supertrend_enabled=False,
         st_period=12,
         st_multiplier=2.5,
         session_enabled=False,
@@ -229,9 +235,9 @@ def get_indices_params():
         tp2_fraction=0.3, tp2_rr=3.0,
         dyn_risk_enabled=True,
         mom_score_enabled=True,
-        mom_score_min=60,
-        equity_filter_enabled=True,
-        equity_filter_period=50,
+        mom_score_min=40,
+        equity_filter_enabled=False,
+        equity_filter_period=200,
     )
 
 
@@ -738,7 +744,7 @@ def get_entry_signal_short(entry_df, bar_idx, params):
 
 
 def check_rsi_filter(entry_df, bar_idx, params, is_long):
-    """RSI confluence filter - avoid overbought/oversold entries."""
+    """RSI confluence filter - avoid extreme overbought/oversold entries."""
     if not params.rsi_enabled:
         return True
     if "rsi" not in entry_df.columns:
@@ -749,14 +755,12 @@ def check_rsi_filter(entry_df, bar_idx, params, is_long):
         return True
 
     if is_long:
+        # Only reject extremely overbought
         if rsi_val > params.rsi_long_max:
             return False
-        if rsi_val < params.rsi_os_level:
-            return False
     else:
+        # Only reject extremely oversold
         if rsi_val < params.rsi_short_min:
-            return False
-        if rsi_val > params.rsi_ob_level:
             return False
 
     return True
@@ -1436,11 +1440,17 @@ def run_multi_symbol_backtest(symbols, params=None, initial_capital=100000.0,
         is_gold = "XAU" in symbol or "GOLD" in symbol
         is_index = symbol in ("US100", "US500")
 
-        if is_gold or is_index:
+        if is_gold:
+            # XAUUSD: W1 context (stable trend), D1 validation (pullback), H1 entry (precise)
+            ctx_df = data.get("W1")
+            val_df = data.get("D1")
+            entry_df = data.get("H1")
+            if entry_df is None:
+                entry_df = data.get("H4")
+        elif is_index:
             ctx_df = data.get("D1")
             val_df = data.get("H4")
             entry_df = data.get("H1")
-
             if ctx_df is None and "W1" in data:
                 ctx_df = data["W1"]
             if val_df is None and "D1" in data:
