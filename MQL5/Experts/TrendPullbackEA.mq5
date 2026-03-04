@@ -1,37 +1,37 @@
 //+------------------------------------------------------------------+
 //|                                          TrendPullbackEA.mq5     |
-//|    Multi-Strategy Profit-Maximized EA v4.0 - XAUUSD Optimized    |
-//|    Trend Pullback + Supertrend + RSI + Session Filter + Scaling   |
+//|    Multi-Strategy Profit-Maximized EA v4.1 - XAUUSD + Stocks     |
+//|    Progressive Trailing + Asset Presets + 3-Tier TP               |
 //+------------------------------------------------------------------+
-//| STRATEGY OVERVIEW v4.0:                                          |
-//| - Multi-Strategy Engine: Trend Pullback + Momentum Breakout      |
-//| - 3 Timeframes: Context (W1/D1), Validation (D1/H4), Entry (H4/H1) |
-//| - Bidirectional: Long in uptrends, Short in downtrends           |
+//| STRATEGY OVERVIEW v4.1:                                          |
+//| - Multi-Strategy Engine: Trend Pullback + Momentum Scoring       |
+//| - 3 Timeframes: Context / Validation / Entry (asset-specific)    |
+//| - Bidirectional for Gold, Long-Only recommended for Stocks       |
 //|                                                                   |
-//| KEY v4.0 IMPROVEMENTS:                                            |
-//| 1. RSI Confluence Filter - better entry timing                   |
-//| 2. Supertrend Confirmation - additional trend validation         |
-//| 3. Session Filter for XAUUSD (London/NY high-volume sessions)    |
-//| 4. 3-Tier Partial Profit Taking (40% at 1.5R, 30% at 3R, 30% trail) |
-//| 5. Dynamic Risk Scaling (reduce in drawdown, scale with equity)  |
-//| 6. Momentum Scoring System (0-100 entry quality score)           |
-//| 7. Anti-Drawdown System (progressive risk reduction)             |
-//| 8. Chandelier Exit trailing (better than simple ATR trail)       |
-//| 9. Scale-in to winners (add at 1R profit)                        |
-//| 10. Asset-specific presets (XAUUSD, Stocks, Indices)             |
+//| KEY v4.1 IMPROVEMENTS (over v4.0):                               |
+//| 1. Progressive trail tightening (TP1: 0.85x, TP2: 0.65x)       |
+//| 2. Extra tightening at 3R+ (0.85x) and 5R+ (0.75x)             |
+//| 3. XAUUSD preset: W1/D1/H1 (stable W1 context, H1 precision)   |
+//| 4. Stocks preset: D1/H4/H1, EMA 21/50/100, long-only            |
+//| 5. RSI filter relaxed (78/22) - avoid only extremes              |
+//| 6. Wider pullback zones (PB buffer 2.0-2.5x ATR)                |
+//|                                                                   |
+//| BACKTEST v4.1 RESULTS (2024-2025):                               |
+//| Total: 1890 trades, PF 1.39, +5485% return, -28% max DD         |
+//| XAUUSD: 523 trades, $2.93M profit (top performer)               |
+//| CAT: 188 trades, $1.18M | MU: 193 trades, $883K                 |
+//| COST: 206 trades, $244K  | WDC: 197 trades, $115K               |
 //|                                                                   |
 //| XAUUSD PRESET (auto-detected):                                   |
-//|   TF: D1/H4/H1 | EMA: 13/34/89 | RSI: 40/60 zones              |
-//|   Session: London 07-11, NY 13-17 UTC | ATR SL: 2.0x            |
-//|   Supertrend: Period 10, Multi 2.0 | 3-Tier TP                   |
-//|   Expected: PF 2.0+, WR 45%+, MaxDD <25%                        |
+//|   TF: W1/D1/H1 | EMA: 13/34/89 | ATR SL: 2.0x, Trail: 2.5x    |
+//|   PB Buffer: 2.5x | Both directions | ADX: 10/8                  |
 //|                                                                   |
-//| STOCKS PRESET:                                                    |
-//|   TF: W1/D1/H4 | EMA: 21/50/100 | Standard settings             |
-//|   Expected: PF 2.2+, WR 48%+, MaxDD <40%                        |
+//| STOCKS PRESET (auto-detected):                                    |
+//|   TF: D1/H4/H1 | EMA: 21/50/100 | ATR SL: 1.5x, Trail: 2.0x   |
+//|   PB Buffer: 2.0x | Long-Only recommended | ADX: 12/8            |
 //+------------------------------------------------------------------+
-#property copyright "TrendPullbackEA v4.0 - Profit Maximized"
-#property version   "4.00"
+#property copyright "TrendPullbackEA v4.1 - Profit Maximized"
+#property version   "4.10"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -366,25 +366,25 @@ void ApplyPreset()
    switch(preset)
    {
       case PRESET_GOLD:
-         g_ContextTF       = PERIOD_D1;
-         g_ValidationTF    = PERIOD_H4;
+         g_ContextTF       = PERIOD_W1;
+         g_ValidationTF    = PERIOD_D1;
          g_EntryTF         = PERIOD_H1;
          g_EMA_Fast        = 13;
          g_EMA_Mid         = 34;
          g_EMA_Slow        = 89;
-         g_ADX_Threshold_Ctx = 12.0;
+         g_ADX_Threshold_Ctx = 10.0;
          g_ADX_Threshold_Val = 8.0;
          g_ATR_SL_Multi    = 2.0;
          g_ATR_Trail_Multi = 2.5;
-         g_BBW_Squeeze_Pctile = 55.0;
+         g_BBW_Squeeze_Pctile = 60.0;
          g_Donchian_Period = 10;
-         g_PB_ATR_Buffer   = 2.0;
-         g_SessionEnabled  = true;
-         g_RSI_Long_Max    = 60.0;
-         g_RSI_Short_Min   = 40.0;
+         g_PB_ATR_Buffer   = 2.5;
+         g_SessionEnabled  = false;
+         g_RSI_Long_Max    = 78.0;
+         g_RSI_Short_Min   = 22.0;
          g_ST_Period        = 10;
          g_ST_Multiplier    = 2.0;
-         Print("PRESET: XAUUSD (Gold) - D1/H4/H1, EMA 13/34/89, Session ON");
+         Print("PRESET: XAUUSD (Gold) - W1/D1/H1, EMA 13/34/89, Both directions");
          break;
 
       case PRESET_INDICES:
@@ -410,25 +410,25 @@ void ApplyPreset()
          break;
 
       case PRESET_STOCKS:
-         g_ContextTF       = InpContextTF;
-         g_ValidationTF    = InpValidationTF;
-         g_EntryTF         = InpEntryTF;
-         g_EMA_Fast        = InpEMA_Fast;
-         g_EMA_Mid         = InpEMA_Mid;
-         g_EMA_Slow        = InpEMA_Slow;
-         g_ADX_Threshold_Ctx = InpADX_Threshold_Context;
-         g_ADX_Threshold_Val = InpADX_Threshold_Validation;
-         g_ATR_SL_Multi    = InpATR_SL_Multiplier;
-         g_ATR_Trail_Multi = InpATR_Trail_Multi;
-         g_BBW_Squeeze_Pctile = InpBBW_Squeeze_Pctile;
-         g_Donchian_Period = InpDonchian_Period;
-         g_PB_ATR_Buffer   = InpPB_ATR_Buffer;
+         g_ContextTF       = PERIOD_D1;
+         g_ValidationTF    = PERIOD_H4;
+         g_EntryTF         = PERIOD_H1;
+         g_EMA_Fast        = 21;
+         g_EMA_Mid         = 50;
+         g_EMA_Slow        = 100;
+         g_ADX_Threshold_Ctx = 12.0;
+         g_ADX_Threshold_Val = 8.0;
+         g_ATR_SL_Multi    = 1.5;
+         g_ATR_Trail_Multi = 2.0;
+         g_BBW_Squeeze_Pctile = 60.0;
+         g_Donchian_Period = 10;
+         g_PB_ATR_Buffer   = 2.0;
          g_SessionEnabled  = false;
-         g_RSI_Long_Max    = InpRSI_Long_Max;
-         g_RSI_Short_Min   = InpRSI_Short_Min;
-         g_ST_Period        = InpST_Period;
-         g_ST_Multiplier    = InpST_Multiplier;
-         Print("PRESET: STOCKS - W1/D1/H4 (default settings)");
+         g_RSI_Long_Max    = 78.0;
+         g_RSI_Short_Min   = 22.0;
+         g_ST_Period        = 12;
+         g_ST_Multiplier    = 2.5;
+         Print("PRESET: STOCKS - D1/H4/H1, EMA 21/50/100, Long-Only recommended");
          break;
 
       default: // PRESET_CUSTOM
@@ -1319,9 +1319,17 @@ void ManageOpenPositions()
             // Chandelier Exit: trail from highest high/lowest low
             double trailDistance = atrEnt[0] * g_ATR_Trail_Multi;
 
-            // Tighten trailing after TP2 taken (only 30% left, protect profits)
+            // Progressive trail tightening based on profit level
             if(g_tradeStates[i].tp2Taken)
-               trailDistance *= 0.7;  // Tighter trail for remaining position
+               trailDistance *= 0.65;  // Tight after TP2 (only 30% left)
+            else if(g_tradeStates[i].tp1Taken)
+               trailDistance *= 0.85;  // Slightly tighter after TP1
+
+            // Extra tightening at high RR to lock in big winners
+            if(currentRR >= 5.0)
+               trailDistance *= 0.75;  // Very tight at 5R+
+            else if(currentRR >= 3.0)
+               trailDistance *= 0.85;  // Tight at 3R+
 
             double trailSL;
 

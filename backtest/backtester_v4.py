@@ -168,53 +168,54 @@ def get_xauusd_params():
 
 
 def get_stocks_params():
-    """Optimized parameters for US Stocks."""
+    """Optimized parameters for US Stocks - v4.1 Profit Maximized.
+    D1 context / H4 validation / H1 entry for more precise entries.
+    Long-only for stocks (shorts lose in bullish markets).
+    """
     return StrategyParams(
         ema_fast=21, ema_mid=50, ema_slow=100,
         adx_threshold_context=12.0,
         adx_threshold_validation=8.0,
         atr_sl_multiplier=1.5,
-        atr_trail_multiplier=2.5,
+        atr_trail_multiplier=2.0,      # Tighter trail for higher RR
         bbw_squeeze_percentile=60.0,
         donchian_period=10,
-        pb_atr_buffer=1.5,
+        pb_atr_buffer=2.0,             # Wider pullback zone
         be_mode='pullback',
         be_rr_ratio=1.5,
         trail_start_rr=1.5,
         max_positions=5,
         require_bullish_bar=False,
-        direction='both',
+        direction='long',              # Long-only for stocks (shorts lose in bull market)
         rsi_enabled=True,
-        rsi_long_max=78.0,    # Higher threshold - breakouts have high RSI
+        rsi_long_max=78.0,
         rsi_short_min=22.0,
         rsi_ob_level=80.0,
         rsi_os_level=20.0,
-        supertrend_enabled=False,  # Disable - conflicts with pullback entries
-        st_period=12,
-        st_multiplier=2.5,
+        supertrend_enabled=False,
         session_enabled=False,
         partial_tp_enabled=True,
         tp1_fraction=0.4, tp1_rr=1.5,
         tp2_fraction=0.3, tp2_rr=3.0,
         dyn_risk_enabled=True,
         mom_score_enabled=True,
-        mom_score_min=40,
+        mom_score_min=50,
         equity_filter_enabled=False,
-        equity_filter_period=200,
+        chandelier_tighten_after_tp2=0.65,
     )
 
 
 def get_indices_params():
-    """Optimized parameters for Indices (US100, US500)."""
+    """Optimized parameters for Indices (US100, US500) - v4.1."""
     return StrategyParams(
         ema_fast=21, ema_mid=50, ema_slow=100,
-        adx_threshold_context=13.0,
-        adx_threshold_validation=9.0,
+        adx_threshold_context=12.0,
+        adx_threshold_validation=8.0,
         atr_sl_multiplier=1.8,
-        atr_trail_multiplier=2.2,
-        bbw_squeeze_percentile=50.0,
-        donchian_period=12,
-        pb_atr_buffer=1.5,
+        atr_trail_multiplier=2.0,
+        bbw_squeeze_percentile=60.0,
+        donchian_period=10,
+        pb_atr_buffer=2.0,
         be_mode='pullback',
         be_rr_ratio=1.5,
         trail_start_rr=1.5,
@@ -227,17 +228,15 @@ def get_indices_params():
         rsi_ob_level=80.0,
         rsi_os_level=20.0,
         supertrend_enabled=False,
-        st_period=12,
-        st_multiplier=2.5,
         session_enabled=False,
         partial_tp_enabled=True,
         tp1_fraction=0.4, tp1_rr=1.5,
         tp2_fraction=0.3, tp2_rr=3.0,
         dyn_risk_enabled=True,
         mom_score_enabled=True,
-        mom_score_min=40,
+        mom_score_min=50,
         equity_filter_enabled=False,
-        equity_filter_period=200,
+        chandelier_tighten_after_tp2=0.65,
     )
 
 
@@ -1137,15 +1136,24 @@ class Backtester:
                 trade.sl_price = trade.entry_price + initial_risk_price * 0.01
                 trade.be_applied = True
 
-        # Chandelier trailing
+        # Chandelier trailing - PROGRESSIVE TIGHTENING
         if current_rr >= p.trail_start_rr:
             trade.trailing_active = True
 
         if trade.trailing_active and atr > 0:
             trail_distance = atr * p.atr_trail_multiplier
-            # Tighter trailing after TP2 taken
+
+            # Progressive tightening: tighter after each TP level
             if trade.tp2_taken:
-                trail_distance *= p.chandelier_tighten_after_tp2
+                trail_distance *= p.chandelier_tighten_after_tp2  # ~0.6x
+            elif trade.tp1_taken:
+                trail_distance *= 0.85  # Slightly tighter after TP1
+
+            # Extra tightening at high RR (lock in big winners)
+            if current_rr >= 5.0:
+                trail_distance *= 0.75  # Very tight at 5R+
+            elif current_rr >= 3.0:
+                trail_distance *= 0.85  # Tight at 3R+
 
             trail_sl = trade.high_since_entry - trail_distance
             if trail_sl > trade.sl_price and trail_sl < current_close:
@@ -1209,14 +1217,23 @@ class Backtester:
                 trade.sl_price = trade.entry_price - initial_risk_price * 0.01
                 trade.be_applied = True
 
-        # Chandelier trailing
+        # Chandelier trailing - PROGRESSIVE TIGHTENING (short)
         if current_rr >= p.trail_start_rr:
             trade.trailing_active = True
 
         if trade.trailing_active and atr > 0:
             trail_distance = atr * p.atr_trail_multiplier
+
+            # Progressive tightening
             if trade.tp2_taken:
                 trail_distance *= p.chandelier_tighten_after_tp2
+            elif trade.tp1_taken:
+                trail_distance *= 0.85
+
+            if current_rr >= 5.0:
+                trail_distance *= 0.75
+            elif current_rr >= 3.0:
+                trail_distance *= 0.85
 
             trail_sl = trade.low_since_entry + trail_distance
             if trail_sl < trade.sl_price and trail_sl > current_close:
@@ -1458,13 +1475,19 @@ def run_multi_symbol_backtest(symbols, params=None, initial_capital=100000.0,
             if entry_df is None and "H4" in data:
                 entry_df = data["H4"]
         else:
-            ctx_df = data.get("W1")
-            val_df = data.get("D1")
-            entry_df = data.get("H4")
+            # Stocks v4.1: D1 context / H4 validation / H1 entry (like gold)
+            # This gives 4x more entry bars than H4 entry
+            ctx_df = data.get("D1")
+            val_df = data.get("H4")
+            entry_df = data.get("H1")
+            if ctx_df is None:
+                ctx_df = data.get("W1")
+            if val_df is None:
+                val_df = data.get("D1")
+            if entry_df is None:
+                entry_df = data.get("H4")
             if entry_df is None:
                 entry_df = data.get("H2")
-            if entry_df is None:
-                entry_df = data.get("H1")
 
         if ctx_df is None and val_df is not None:
             ctx_df = resample_to_weekly(val_df)
