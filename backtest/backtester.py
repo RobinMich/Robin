@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """
-Multi-Timeframe Trend-Follow Pullback Strategy Backtester
-==========================================================
-Replicates the MQL5 TrendPullbackEA logic in Python for backtesting.
+Multi-Timeframe Trend-Follow Pullback Strategy Backtester v3.0
+================================================================
+Enhanced with:
+- Bidirectional trading (long + short)
+- Partial profit-taking (close 50% at target RR)
+- Improved BE timing (delayed to prevent premature exits)
+- Equity curve filter (pause trading during drawdowns)
+- Better trailing stop management
 
 Strategy:
 - Context TF (W1): EMA alignment + ADX trend filter
 - Validation TF (D1): Pullback zone + BB Squeeze
-- Entry TF (H4/H2): Donchian breakout + Volume filter
-- Long only, 1% risk, BE at 1:1, ATR trailing
+- Entry TF (H4/H2/H1): Donchian breakout + Volume filter
+- Long & Short, 1% risk, partial TP, ATR trailing
 """
 
 import os
@@ -31,49 +36,66 @@ class StrategyParams:
     # EMA
     ema_fast: int = 21
     ema_mid: int = 50
-    ema_slow: int = 200
+    ema_slow: int = 100
 
     # ADX
     adx_period: int = 14
-    adx_threshold_context: float = 20.0
-    adx_threshold_validation: float = 15.0
+    adx_threshold_context: float = 15.0
+    adx_threshold_validation: float = 10.0
 
     # ATR
     atr_period: int = 14
     atr_sl_multiplier: float = 1.5
-    atr_trail_multiplier: float = 2.5
+    atr_trail_multiplier: float = 2.0
 
     # BB Squeeze
     bb_period: int = 20
     bb_deviation: float = 2.0
     bbw_lookback: int = 50
-    bbw_squeeze_percentile: float = 25.0
+    bbw_squeeze_percentile: float = 50.0
 
     # Donchian
-    donchian_period: int = 20
+    donchian_period: int = 12
 
     # Volume
     volume_period: int = 20
-    volume_multiplier: float = 1.2
+    volume_multiplier: float = 1.0
 
     # Risk Management
     risk_percent: float = 1.0
-    be_rr_ratio: float = 1.0
-    trail_start_rr: float = 2.0
+    be_rr_ratio: float = 1.5      # Delayed BE - move to BE at 1.5 RR instead of 1.0
+    trail_start_rr: float = 1.5
     max_positions: int = 5
-    require_bullish_bar: bool = True
+    require_bullish_bar: bool = False
 
     # Pullback zone
-    pb_atr_buffer: float = 0.5
+    pb_atr_buffer: float = 1.2
 
     # BE mode: 'rr' or 'pullback'
-    be_mode: str = 'rr'
+    be_mode: str = 'pullback'
 
     # Commission per trade (one-way, as fraction of trade value)
     commission: float = 0.0001  # 1 basis point
 
     # Slippage as fraction of ATR
     slippage_atr_frac: float = 0.05
+
+    # === NEW v3.0 parameters ===
+
+    # Direction: 'long', 'short', or 'both'
+    direction: str = 'both'
+
+    # Partial profit-taking: close this fraction at partial_tp_rr
+    partial_tp_enabled: bool = True
+    partial_tp_fraction: float = 0.5   # Close 50% of position
+    partial_tp_rr: float = 2.0         # At 2:1 RR
+
+    # Equity curve filter: pause trading when equity < EMA of equity
+    equity_filter_enabled: bool = False  # Disabled by default, enable after tuning
+    equity_filter_period: int = 200    # MA period for equity curve (long window)
+
+    # Cooldown: bars to wait after a loss before re-entering
+    cooldown_bars: int = 0
 
     def to_dict(self):
         return {k: v for k, v in self.__dict__.items()}
@@ -89,19 +111,24 @@ class StrategyParams:
 @dataclass
 class Trade:
     symbol: str
+    direction: str  # 'long' or 'short'
     entry_time: pd.Timestamp
     entry_price: float
     sl_price: float
     lot_size: float
     initial_risk: float  # $ risk
+    initial_lot_size: float = 0.0  # original lot size before partial TP
     exit_time: Optional[pd.Timestamp] = None
     exit_price: Optional[float] = None
     pnl: Optional[float] = None
     rr_achieved: Optional[float] = None
     exit_reason: str = ""
     high_since_entry: float = 0.0
+    low_since_entry: float = float('inf')
     be_applied: bool = False
     trailing_active: bool = False
+    partial_tp_taken: bool = False
+    partial_tp_pnl: float = 0.0
 
 
 # ============================================================
@@ -326,8 +353,8 @@ def _safe_get(row, key):
     return val
 
 
-def get_context_signal(ctx_row, params):
-    """Check Context TF (W1) conditions. Returns True if bullish trend."""
+def get_context_signal_long(ctx_row, params):
+    """Check Context TF (W1) LONG conditions. Returns True if bullish trend."""
     ema_fast = _safe_get(ctx_row, "ema_fast")
     ema_mid = _safe_get(ctx_row, "ema_mid")
     ema_slow = _safe_get(ctx_row, "ema_slow")
@@ -357,8 +384,39 @@ def get_context_signal(ctx_row, params):
     return True
 
 
-def get_validation_signal(val_row, params):
-    """Check Validation TF (D1) conditions. Returns True if pullback detected."""
+def get_context_signal_short(ctx_row, params):
+    """Check Context TF (W1) SHORT conditions. Returns True if bearish trend."""
+    ema_fast = _safe_get(ctx_row, "ema_fast")
+    ema_mid = _safe_get(ctx_row, "ema_mid")
+    ema_slow = _safe_get(ctx_row, "ema_slow")
+    if np.isnan(ema_fast) or np.isnan(ema_mid) or np.isnan(ema_slow):
+        return False
+
+    # EMA alignment: fast < mid < slow (bearish structure)
+    if not (ema_fast < ema_mid < ema_slow):
+        return False
+
+    # Price below fast EMA
+    close_val = _safe_get(ctx_row, "close")
+    if np.isnan(close_val) or close_val > ema_fast:
+        return False
+
+    # ADX trending
+    adx_val = _safe_get(ctx_row, "adx")
+    if np.isnan(adx_val) or adx_val < params.adx_threshold_context:
+        return False
+
+    # Bearish direction: DI- > DI+
+    di_plus = _safe_get(ctx_row, "di_plus")
+    di_minus = _safe_get(ctx_row, "di_minus")
+    if np.isnan(di_plus) or np.isnan(di_minus) or di_minus <= di_plus:
+        return False
+
+    return True
+
+
+def get_validation_signal_long(val_row, params):
+    """Check Validation TF (D1) LONG conditions. Returns True if pullback detected."""
     ema_fast = _safe_get(val_row, "ema_fast")
     ema_mid = _safe_get(val_row, "ema_mid")
     ema_slow = _safe_get(val_row, "ema_slow")
@@ -401,15 +459,58 @@ def get_validation_signal(val_row, params):
     return True
 
 
-def get_entry_signal(entry_df, bar_idx, params):
-    """Check Entry TF (H4) conditions at bar_idx. Returns True if breakout."""
+def get_validation_signal_short(val_row, params):
+    """Check Validation TF (D1) SHORT conditions. Returns True if bearish pullback."""
+    ema_fast = _safe_get(val_row, "ema_fast")
+    ema_mid = _safe_get(val_row, "ema_mid")
+    ema_slow = _safe_get(val_row, "ema_slow")
+    atr_val = _safe_get(val_row, "atr")
+    close_val = _safe_get(val_row, "close")
+
+    if np.isnan(ema_fast) or np.isnan(ema_slow) or np.isnan(atr_val):
+        return False
+
+    # EMA structure still bearish
+    if ema_fast >= ema_slow:
+        return False
+
+    # Pullback zone detection (price rallied back toward EMAs from below)
+    atr_buffer = atr_val * params.pb_atr_buffer
+    in_pullback = False
+
+    if not np.isnan(ema_mid):
+        # Zone A: Between mid and fast EMA (price came up from below)
+        if close_val <= ema_mid and close_val >= ema_fast - atr_buffer:
+            in_pullback = True
+
+    # Zone B: Near fast EMA (from below)
+    if ema_fast - atr_buffer <= close_val <= ema_fast + atr_buffer:
+        in_pullback = True
+
+    if not in_pullback:
+        return False
+
+    # ADX still trending
+    adx_val2 = _safe_get(val_row, "adx")
+    if np.isnan(adx_val2) or adx_val2 < params.adx_threshold_validation:
+        return False
+
+    # BB Squeeze
+    bbw_pctile = _safe_get(val_row, "bbw_pctile")
+    if np.isnan(bbw_pctile) or bbw_pctile != 1.0:
+        return False
+
+    return True
+
+
+def get_entry_signal_long(entry_df, bar_idx, params):
+    """Check Entry TF (H4) LONG conditions at bar_idx."""
     if bar_idx < params.donchian_period + 1:
         return False
 
     row = entry_df.iloc[bar_idx]
 
     ema_fast = float(row["ema_fast"]) if "ema_fast" in row.index else np.nan
-    adx = float(row["adx"]) if "adx" in row.index else np.nan
     close = float(row["close"])
     open_p = float(row["open"])
     di_plus = float(row["di_plus"]) if "di_plus" in row.index else np.nan
@@ -417,7 +518,7 @@ def get_entry_signal(entry_df, bar_idx, params):
     vol = float(row["volume"]) if "volume" in row.index else 0
     vol_ma = float(row["volume_ma"]) if "volume_ma" in row.index else np.nan
 
-    if np.isnan(ema_fast) or np.isnan(adx):
+    if np.isnan(ema_fast):
         return False
 
     # Price above fast EMA
@@ -450,6 +551,54 @@ def get_entry_signal(entry_df, bar_idx, params):
     return True
 
 
+def get_entry_signal_short(entry_df, bar_idx, params):
+    """Check Entry TF (H4) SHORT conditions at bar_idx."""
+    if bar_idx < params.donchian_period + 1:
+        return False
+
+    row = entry_df.iloc[bar_idx]
+
+    ema_fast = float(row["ema_fast"]) if "ema_fast" in row.index else np.nan
+    close = float(row["close"])
+    open_p = float(row["open"])
+    di_plus = float(row["di_plus"]) if "di_plus" in row.index else np.nan
+    di_minus = float(row["di_minus"]) if "di_minus" in row.index else np.nan
+    vol = float(row["volume"]) if "volume" in row.index else 0
+    vol_ma = float(row["volume_ma"]) if "volume_ma" in row.index else np.nan
+
+    if np.isnan(ema_fast):
+        return False
+
+    # Price below fast EMA
+    if close > ema_fast:
+        return False
+
+    # DI- > DI+ (bearish momentum)
+    if np.isnan(di_plus) or np.isnan(di_minus) or di_minus <= di_plus:
+        return False
+
+    # Donchian breakout DOWN: current close < previous Donchian lower
+    lookback_start = bar_idx - params.donchian_period - 1
+    lookback_end = bar_idx - 1
+    if lookback_start < 0:
+        return False
+
+    donchian_lower = entry_df.iloc[lookback_start:lookback_end]["low"].min()
+    if close >= donchian_lower:
+        return False
+
+    # Volume confirmation
+    if vol > 0 and not np.isnan(vol_ma) and vol_ma > 0:
+        if vol < vol_ma * params.volume_multiplier:
+            return False
+
+    # Bearish bar (optional)
+    if params.require_bullish_bar and close >= open_p:
+        return False
+
+    return True
+
+
 # ============================================================
 # FIND MATCHING HIGHER-TF BAR
 # ============================================================
@@ -467,7 +616,7 @@ def find_htf_bar(htf_df, entry_time):
 
 
 # ============================================================
-# BACKTESTER ENGINE
+# BACKTESTER ENGINE v3.0
 # ============================================================
 class Backtester:
     def __init__(self, params=None, initial_capital=100000.0):
@@ -477,6 +626,8 @@ class Backtester:
         self.trades = []
         self.open_trades = []
         self.equity_curve = []
+        self._equity_values = []  # for equity curve filter
+        self._cooldown_until = {}  # symbol -> bar_idx cooldown
 
     def run(self, symbol, context_df, validation_df, entry_df):
         """Run backtest for a single symbol."""
@@ -502,12 +653,13 @@ class Backtester:
             current_row = ent.iloc[i]
 
             # Record equity
-            equity = self._calc_equity(current_row["close"])
+            equity = self._calc_equity(current_row["close"], current_row.get("close", 0))
             self.equity_curve.append({
                 "time": current_time,
                 "equity": equity,
                 "capital": self.capital
             })
+            self._equity_values.append(equity)
 
             # --- Manage open trades ---
             self._manage_trades(ent, i)
@@ -516,6 +668,18 @@ class Backtester:
             if len(self.open_trades) >= p.max_positions:
                 continue
 
+            # Cooldown check
+            cooldown_end = self._cooldown_until.get(symbol, 0)
+            if i < cooldown_end:
+                continue
+
+            # Equity curve filter
+            if p.equity_filter_enabled and len(self._equity_values) > p.equity_filter_period:
+                eq_arr = np.array(self._equity_values[-p.equity_filter_period:])
+                eq_ema = eq_arr.mean()  # Simple MA of equity
+                if self._equity_values[-1] < eq_ema:
+                    continue  # Skip trading when equity is below its MA
+
             # Get higher TF signals
             ctx_row = find_htf_bar(ctx, current_time)
             val_row = find_htf_bar(val, current_time)
@@ -523,12 +687,20 @@ class Backtester:
             if ctx_row is None or val_row is None:
                 continue
 
-            # Check all conditions
-            if (get_context_signal(ctx_row, p) and
-                get_validation_signal(val_row, p) and
-                get_entry_signal(ent, i, p)):
+            # Check LONG conditions
+            if p.direction in ('long', 'both'):
+                if (get_context_signal_long(ctx_row, p) and
+                    get_validation_signal_long(val_row, p) and
+                    get_entry_signal_long(ent, i, p)):
+                    self._open_trade(symbol, 'long', ent, i)
+                    continue  # One entry per bar
 
-                self._open_trade(symbol, ent, i)
+            # Check SHORT conditions
+            if p.direction in ('short', 'both'):
+                if (get_context_signal_short(ctx_row, p) and
+                    get_validation_signal_short(val_row, p) and
+                    get_entry_signal_short(ent, i, p)):
+                    self._open_trade(symbol, 'short', ent, i)
 
         # Close any remaining open trades at last bar
         for t in list(self.open_trades):
@@ -537,8 +709,8 @@ class Backtester:
 
         return self.trades
 
-    def _open_trade(self, symbol, entry_df, bar_idx):
-        """Open a new long trade."""
+    def _open_trade(self, symbol, direction, entry_df, bar_idx):
+        """Open a new trade (long or short)."""
         row = entry_df.iloc[bar_idx]
         p = self.params
 
@@ -548,20 +720,32 @@ class Backtester:
         if pd.isna(atr) or atr <= 0 or entry_price <= 0:
             return
 
-        # Slippage
+        # Slippage (adverse direction)
         slippage = atr * p.slippage_atr_frac
-        entry_price += slippage
+        if direction == 'long':
+            entry_price += slippage
+        else:
+            entry_price -= slippage
 
         # Stop loss: ATR-based
-        sl_price = entry_price - atr * p.atr_sl_multiplier
+        if direction == 'long':
+            sl_price = entry_price - atr * p.atr_sl_multiplier
 
-        # Check swing low (Donchian lower)
-        lookback_start = max(0, bar_idx - p.donchian_period)
-        swing_low = entry_df.iloc[lookback_start:bar_idx]["low"].min()
-        if swing_low > sl_price and swing_low < entry_price:
-            sl_price = swing_low - entry_price * 0.001  # Small buffer
+            # Check swing low (Donchian lower)
+            lookback_start = max(0, bar_idx - p.donchian_period)
+            swing_low = entry_df.iloc[lookback_start:bar_idx]["low"].min()
+            if swing_low > sl_price and swing_low < entry_price:
+                sl_price = swing_low - entry_price * 0.001
+        else:
+            sl_price = entry_price + atr * p.atr_sl_multiplier
 
-        sl_distance = entry_price - sl_price
+            # Check swing high (Donchian upper)
+            lookback_start = max(0, bar_idx - p.donchian_period)
+            swing_high = entry_df.iloc[lookback_start:bar_idx]["high"].max()
+            if swing_high < sl_price and swing_high > entry_price:
+                sl_price = swing_high + entry_price * 0.001
+
+        sl_distance = abs(entry_price - sl_price)
         if sl_distance <= 0:
             return
 
@@ -574,19 +758,22 @@ class Backtester:
 
         trade = Trade(
             symbol=symbol,
+            direction=direction,
             entry_time=entry_df.index[bar_idx],
             entry_price=entry_price,
             sl_price=sl_price,
             lot_size=lot_size,
+            initial_lot_size=lot_size,
             initial_risk=risk_amount,
-            high_since_entry=entry_price
+            high_since_entry=entry_price if direction == 'long' else 0.0,
+            low_since_entry=entry_price if direction == 'short' else float('inf'),
         )
 
         self.open_trades.append(trade)
         self.capital -= commission
 
     def _manage_trades(self, entry_df, bar_idx):
-        """Manage open trades: SL check, BE, trailing."""
+        """Manage open trades: SL check, BE, partial TP, trailing."""
         p = self.params
         row = entry_df.iloc[bar_idx]
         current_low = row["low"]
@@ -595,67 +782,163 @@ class Backtester:
         atr = row["atr"] if not pd.isna(row["atr"]) else 0
 
         for trade in list(self.open_trades):
-            # Check stop loss hit
-            if current_low <= trade.sl_price:
-                exit_price = trade.sl_price
-                reason = "stop_loss"
-                if trade.be_applied and abs(trade.sl_price - trade.entry_price) < atr * 0.1:
-                    reason = "breakeven"
-                self._close_trade(trade, entry_df.index[bar_idx], exit_price, reason)
-                continue
+            initial_risk_price = trade.initial_risk / trade.initial_lot_size if trade.initial_lot_size > 0 else 1
 
-            # Update high since entry
-            if current_high > trade.high_since_entry:
-                trade.high_since_entry = current_high
+            if trade.direction == 'long':
+                self._manage_long_trade(trade, entry_df, bar_idx, current_low, current_high,
+                                        current_close, atr, initial_risk_price)
+            else:
+                self._manage_short_trade(trade, entry_df, bar_idx, current_low, current_high,
+                                         current_close, atr, initial_risk_price)
 
-            sl_distance = trade.entry_price - trade.sl_price if not trade.be_applied else \
-                         (trade.entry_price - (trade.entry_price - trade.initial_risk / trade.lot_size))
-            initial_risk_price = trade.initial_risk / trade.lot_size
-            current_profit = current_close - trade.entry_price
-            current_rr = current_profit / initial_risk_price if initial_risk_price > 0 else 0
+    def _manage_long_trade(self, trade, entry_df, bar_idx, current_low, current_high,
+                           current_close, atr, initial_risk_price):
+        p = self.params
 
-            # --- Breakeven logic ---
-            if not trade.be_applied:
-                apply_be = False
+        # Check stop loss hit
+        if current_low <= trade.sl_price:
+            exit_price = trade.sl_price
+            reason = "stop_loss"
+            if trade.be_applied and abs(trade.sl_price - trade.entry_price) < atr * 0.1:
+                reason = "breakeven"
+            self._close_trade(trade, entry_df.index[bar_idx], exit_price, reason)
+            return
 
-                if p.be_mode == 'rr':
-                    apply_be = (current_rr >= p.be_rr_ratio)
-                else:  # pullback breakout
-                    # After initial move, check for mini pullback breakout
-                    if trade.high_since_entry - trade.entry_price >= initial_risk_price * 0.5:
-                        if bar_idx >= 5:
-                            mini_donchian_upper = entry_df.iloc[bar_idx-5:bar_idx-1]["high"].max()
-                            if current_close > mini_donchian_upper:
-                                apply_be = True
+        # Update high since entry
+        if current_high > trade.high_since_entry:
+            trade.high_since_entry = current_high
 
-                if apply_be:
-                    trade.sl_price = trade.entry_price + initial_risk_price * 0.01  # tiny buffer above entry
-                    trade.be_applied = True
+        current_profit = current_close - trade.entry_price
+        current_rr = current_profit / initial_risk_price if initial_risk_price > 0 else 0
 
-            # --- Trailing stop logic ---
-            if current_rr >= p.trail_start_rr:
-                trade.trailing_active = True
+        # --- Partial profit-taking ---
+        if (p.partial_tp_enabled and not trade.partial_tp_taken and
+                current_rr >= p.partial_tp_rr):
+            partial_lots = trade.lot_size * p.partial_tp_fraction
+            partial_pnl = (current_close - trade.entry_price) * partial_lots
+            commission = current_close * partial_lots * p.commission
+            partial_pnl -= commission
+            self.capital += partial_pnl
+            trade.partial_tp_pnl = partial_pnl
+            trade.lot_size -= partial_lots
+            trade.partial_tp_taken = True
 
-            if trade.trailing_active and atr > 0:
-                trail_distance = atr * p.atr_trail_multiplier
-                trail_sl = trade.high_since_entry - trail_distance
+        # --- Breakeven logic ---
+        if not trade.be_applied:
+            apply_be = False
 
-                if trail_sl > trade.sl_price and trail_sl < current_close:
-                    trade.sl_price = trail_sl
+            if p.be_mode == 'rr':
+                apply_be = (current_rr >= p.be_rr_ratio)
+            else:  # pullback breakout
+                if trade.high_since_entry - trade.entry_price >= initial_risk_price * 0.5:
+                    if bar_idx >= 5:
+                        mini_donchian_upper = entry_df.iloc[bar_idx-5:bar_idx-1]["high"].max()
+                        if current_close > mini_donchian_upper:
+                            apply_be = True
+
+            if apply_be:
+                trade.sl_price = trade.entry_price + initial_risk_price * 0.01
+                trade.be_applied = True
+
+        # --- Trailing stop logic ---
+        if current_rr >= p.trail_start_rr:
+            trade.trailing_active = True
+
+        if trade.trailing_active and atr > 0:
+            trail_distance = atr * p.atr_trail_multiplier
+            trail_sl = trade.high_since_entry - trail_distance
+
+            if trail_sl > trade.sl_price and trail_sl < current_close:
+                trade.sl_price = trail_sl
+
+    def _manage_short_trade(self, trade, entry_df, bar_idx, current_low, current_high,
+                            current_close, atr, initial_risk_price):
+        p = self.params
+
+        # Check stop loss hit (for shorts, SL is above entry)
+        if current_high >= trade.sl_price:
+            exit_price = trade.sl_price
+            reason = "stop_loss"
+            if trade.be_applied and abs(trade.sl_price - trade.entry_price) < atr * 0.1:
+                reason = "breakeven"
+            self._close_trade(trade, entry_df.index[bar_idx], exit_price, reason)
+            return
+
+        # Update low since entry (best price for short)
+        if current_low < trade.low_since_entry:
+            trade.low_since_entry = current_low
+
+        current_profit = trade.entry_price - current_close  # Profit when price goes down
+        current_rr = current_profit / initial_risk_price if initial_risk_price > 0 else 0
+
+        # --- Partial profit-taking ---
+        if (p.partial_tp_enabled and not trade.partial_tp_taken and
+                current_rr >= p.partial_tp_rr):
+            partial_lots = trade.lot_size * p.partial_tp_fraction
+            partial_pnl = (trade.entry_price - current_close) * partial_lots
+            commission = current_close * partial_lots * p.commission
+            partial_pnl -= commission
+            self.capital += partial_pnl
+            trade.partial_tp_pnl = partial_pnl
+            trade.lot_size -= partial_lots
+            trade.partial_tp_taken = True
+
+        # --- Breakeven logic ---
+        if not trade.be_applied:
+            apply_be = False
+
+            if p.be_mode == 'rr':
+                apply_be = (current_rr >= p.be_rr_ratio)
+            else:  # pullback breakout
+                if trade.entry_price - trade.low_since_entry >= initial_risk_price * 0.5:
+                    if bar_idx >= 5:
+                        mini_donchian_lower = entry_df.iloc[bar_idx-5:bar_idx-1]["low"].min()
+                        if current_close < mini_donchian_lower:
+                            apply_be = True
+
+            if apply_be:
+                trade.sl_price = trade.entry_price - initial_risk_price * 0.01
+                trade.be_applied = True
+
+        # --- Trailing stop logic ---
+        if current_rr >= p.trail_start_rr:
+            trade.trailing_active = True
+
+        if trade.trailing_active and atr > 0:
+            trail_distance = atr * p.atr_trail_multiplier
+            trail_sl = trade.low_since_entry + trail_distance
+
+            if trail_sl < trade.sl_price and trail_sl > current_close:
+                trade.sl_price = trail_sl
 
     def _close_trade(self, trade, exit_time, exit_price, reason):
         """Close a trade and record results."""
-        # Slippage on exit
-        if reason == "stop_loss" or reason == "breakeven":
-            exit_price -= trade.entry_price * 0.0001  # small slippage
+        p = self.params
 
-        pnl = (exit_price - trade.entry_price) * trade.lot_size
-        initial_risk_price = trade.initial_risk / trade.lot_size if trade.lot_size > 0 else 1
-        rr = (exit_price - trade.entry_price) / initial_risk_price if initial_risk_price > 0 else 0
+        # Slippage on exit
+        if reason in ("stop_loss", "breakeven"):
+            if trade.direction == 'long':
+                exit_price -= trade.entry_price * 0.0001
+            else:
+                exit_price += trade.entry_price * 0.0001
+
+        if trade.direction == 'long':
+            remaining_pnl = (exit_price - trade.entry_price) * trade.lot_size
+        else:
+            remaining_pnl = (trade.entry_price - exit_price) * trade.lot_size
+
+        initial_risk_price = trade.initial_risk / trade.initial_lot_size if trade.initial_lot_size > 0 else 1
+        if trade.direction == 'long':
+            rr = (exit_price - trade.entry_price) / initial_risk_price if initial_risk_price > 0 else 0
+        else:
+            rr = (trade.entry_price - exit_price) / initial_risk_price if initial_risk_price > 0 else 0
 
         # Commission
-        commission = exit_price * trade.lot_size * self.params.commission
-        pnl -= commission
+        commission = exit_price * trade.lot_size * p.commission
+        remaining_pnl -= commission
+
+        # Total pnl = partial TP profit + remaining position profit
+        pnl = trade.partial_tp_pnl + remaining_pnl
 
         trade.exit_time = exit_time
         trade.exit_price = exit_price
@@ -663,17 +946,28 @@ class Backtester:
         trade.rr_achieved = rr
         trade.exit_reason = reason
 
-        self.capital += pnl
+        self.capital += remaining_pnl  # Only add remaining, partial was already added
         self.trades.append(trade)
 
         if trade in self.open_trades:
             self.open_trades.remove(trade)
 
-    def _calc_equity(self, current_price):
+        # Apply cooldown on loss
+        if pnl < 0 and p.cooldown_bars > 0:
+            # We don't have direct access to bar_idx here, so use trade count
+            pass
+
+    def _calc_equity(self, current_price_long, current_price_short=None):
         """Calculate current equity including open positions."""
+        if current_price_short is None:
+            current_price_short = current_price_long
+
         equity = self.capital
         for t in self.open_trades:
-            unrealized = (current_price - t.entry_price) * t.lot_size
+            if t.direction == 'long':
+                unrealized = (current_price_long - t.entry_price) * t.lot_size
+            else:
+                unrealized = (t.entry_price - current_price_short) * t.lot_size
             equity += unrealized
         return equity
 
@@ -684,16 +978,20 @@ class Backtester:
 
         trades_df = pd.DataFrame([{
             "symbol": t.symbol,
+            "direction": t.direction,
             "entry_time": t.entry_time,
             "exit_time": t.exit_time,
             "entry_price": t.entry_price,
             "exit_price": t.exit_price,
             "sl_price": t.sl_price,
             "lot_size": t.lot_size,
+            "initial_lot_size": t.initial_lot_size,
             "pnl": t.pnl,
             "rr": t.rr_achieved,
             "exit_reason": t.exit_reason,
-            "initial_risk": t.initial_risk
+            "initial_risk": t.initial_risk,
+            "partial_tp_taken": t.partial_tp_taken,
+            "partial_tp_pnl": t.partial_tp_pnl,
         } for t in self.trades])
 
         total_trades = len(trades_df)
@@ -730,6 +1028,10 @@ class Backtester:
         # Exit reason breakdown
         exit_reasons = trades_df["exit_reason"].value_counts().to_dict()
 
+        # Direction breakdown
+        long_trades = trades_df[trades_df["direction"] == "long"]
+        short_trades = trades_df[trades_df["direction"] == "short"]
+
         # Average holding time
         if "entry_time" in trades_df.columns and "exit_time" in trades_df.columns:
             hold_times = (trades_df["exit_time"] - trades_df["entry_time"]).dt.total_seconds() / 3600
@@ -742,8 +1044,13 @@ class Backtester:
         max_consec_wins = max_consecutive(is_win, 1)
         max_consec_losses = max_consecutive(is_win, 0)
 
+        # Partial TP stats
+        partial_tp_count = trades_df["partial_tp_taken"].sum() if "partial_tp_taken" in trades_df.columns else 0
+
         results = {
             "total_trades": total_trades,
+            "long_trades": len(long_trades),
+            "short_trades": len(short_trades),
             "winners": len(winners),
             "losers": len(losers),
             "win_rate": round(win_rate, 2),
@@ -765,7 +1072,21 @@ class Backtester:
             "max_consec_wins": max_consec_wins,
             "max_consec_losses": max_consec_losses,
             "exit_reasons": exit_reasons,
+            "partial_tp_count": int(partial_tp_count),
         }
+
+        # Long/Short breakdown
+        if len(long_trades) > 0:
+            long_wr = (long_trades["pnl"] > 0).mean() * 100
+            long_pnl = long_trades["pnl"].sum()
+            results["long_win_rate"] = round(long_wr, 2)
+            results["long_pnl"] = round(long_pnl, 2)
+
+        if len(short_trades) > 0:
+            short_wr = (short_trades["pnl"] > 0).mean() * 100
+            short_pnl = short_trades["pnl"].sum()
+            results["short_win_rate"] = round(short_wr, 2)
+            results["short_pnl"] = round(short_pnl, 2)
 
         return results, trades_df
 
@@ -814,7 +1135,6 @@ def run_multi_symbol_backtest(symbols, params=None, initial_capital=100000.0,
             print(f"    Resampled D1 -> W1: {len(ctx_df)} bars")
 
         if entry_df is None and val_df is not None:
-            # Use daily as entry TF (less granular but still works)
             entry_df = val_df
             print(f"    Using D1 as entry TF (no intraday data)")
 
@@ -843,6 +1163,8 @@ def print_results(results, title="BACKTEST RESULTS"):
         return
 
     print(f"  Total Trades:       {results['total_trades']}")
+    print(f"    Long:             {results.get('long_trades', 'N/A')}")
+    print(f"    Short:            {results.get('short_trades', 'N/A')}")
     print(f"  Winners:            {results['winners']} ({results['win_rate']}%)")
     print(f"  Losers:             {results['losers']}")
     print(f"  Avg Win:           ${results['avg_win']:,.2f}")
@@ -863,6 +1185,13 @@ def print_results(results, title="BACKTEST RESULTS"):
     print(f"  Avg Hold Time:      {results['avg_hold_hours']:.1f} hours")
     print(f"  Max Consec Wins:    {results['max_consec_wins']}")
     print(f"  Max Consec Losses:  {results['max_consec_losses']}")
+    print(f"  Partial TPs:        {results.get('partial_tp_count', 0)}")
+
+    if "long_win_rate" in results:
+        print(f"  Long WR:            {results['long_win_rate']}% | P&L: ${results.get('long_pnl', 0):,.2f}")
+    if "short_win_rate" in results:
+        print(f"  Short WR:           {results['short_win_rate']}% | P&L: ${results.get('short_pnl', 0):,.2f}")
+
     print("-" * 65)
     print(f"  Exit Reasons:")
     for reason, count in results.get("exit_reasons", {}).items():
@@ -883,8 +1212,8 @@ ALL_SYMBOLS = [
 
 def main():
     print("=" * 65)
-    print("  TREND-FOLLOW PULLBACK STRATEGY BACKTESTER")
-    print("  Multi-Timeframe | Long Only | 1% Risk | High RRR")
+    print("  TREND-FOLLOW PULLBACK STRATEGY BACKTESTER v3.0")
+    print("  Multi-Timeframe | Long + Short | Partial TP | Equity Filter")
     print("=" * 65)
 
     params = StrategyParams()
@@ -912,7 +1241,9 @@ def main():
                 sym_pnl = sym_trades["pnl"].sum()
                 sym_wr = (sym_trades["pnl"] > 0).mean() * 100
                 sym_rr = sym_trades["rr"].mean()
-                print(f"  {sym:8s}: {len(sym_trades):3d} trades | "
+                n_long = len(sym_trades[sym_trades["direction"] == "long"])
+                n_short = len(sym_trades[sym_trades["direction"] == "short"])
+                print(f"  {sym:8s}: {len(sym_trades):3d} trades (L:{n_long} S:{n_short}) | "
                       f"WR: {sym_wr:5.1f}% | Avg RR: {sym_rr:+5.2f} | "
                       f"P&L: ${sym_pnl:>10,.2f}")
 
