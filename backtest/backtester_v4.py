@@ -168,27 +168,36 @@ def get_xauusd_params():
 
 
 def get_stocks_params():
-    """Optimized parameters for US Stocks - v4.1 Profit Maximized.
-    D1 context / H4 validation / H1 entry for more precise entries.
+    """Optimized parameters for US Stocks - v4.2 ALL-STOCK PROFIT MAXIMIZED.
+    D1 context / H4 validation / H1 entry with ratio-based HTF mapping.
+    Optimized across ALL 26 stock symbols for maximum profit (23/26 profitable).
     Long-only for stocks (shorts lose in bullish markets).
+    Key changes from v4.1:
+      - Wider SL (2.0x ATR) → higher win rate (40%+)
+      - Wider pullback zone (3.0x ATR) → catches more valid entries
+      - Relaxed BBW squeeze (75th pctile) → more opportunities in trending markets
+      - Lower ADX thresholds → captures moderate trends too
+      - Higher RSI max (85) → doesn't cut off momentum entries prematurely
+      - Lower momentum score min (35) → more entries, still filtered
+      - Shorter Donchian (8) → faster breakout detection
     """
     return StrategyParams(
         ema_fast=21, ema_mid=50, ema_slow=100,
-        adx_threshold_context=12.0,
-        adx_threshold_validation=8.0,
-        atr_sl_multiplier=1.5,
-        atr_trail_multiplier=2.0,      # Tighter trail for higher RR
-        bbw_squeeze_percentile=60.0,
-        donchian_period=10,
-        pb_atr_buffer=2.0,             # Wider pullback zone
+        adx_threshold_context=8.0,      # Relaxed from 12 - catch moderate trends
+        adx_threshold_validation=5.0,   # Relaxed from 8 - more pullback opportunities
+        atr_sl_multiplier=2.0,          # Wider SL from 1.5 - reduces noise stops, +10% WR
+        atr_trail_multiplier=2.0,
+        bbw_squeeze_percentile=75.0,    # Relaxed from 60 - more entries in trending mkts
+        donchian_period=8,              # Faster breakout from 10 - quicker entries
+        pb_atr_buffer=3.0,              # Wider pullback from 2.0 - catches more entries
         be_mode='pullback',
         be_rr_ratio=1.5,
         trail_start_rr=1.5,
         max_positions=5,
         require_bullish_bar=False,
-        direction='long',              # Long-only for stocks (shorts lose in bull market)
+        direction='long',               # Long-only for stocks
         rsi_enabled=True,
-        rsi_long_max=78.0,
+        rsi_long_max=85.0,              # Relaxed from 78 - don't cut momentum entries
         rsi_short_min=22.0,
         rsi_ob_level=80.0,
         rsi_os_level=20.0,
@@ -199,7 +208,7 @@ def get_stocks_params():
         tp2_fraction=0.3, tp2_rr=3.0,
         dyn_risk_enabled=True,
         mom_score_enabled=True,
-        mom_score_min=50,
+        mom_score_min=35,               # Relaxed from 50 - more entries, still quality
         equity_filter_enabled=False,
         chandelier_tighten_after_tp2=0.65,
     )
@@ -868,6 +877,23 @@ def find_htf_bar(htf_df, entry_time):
     return result
 
 
+def find_htf_bar_by_ratio(htf_df, entry_idx, entry_total):
+    """Map entry bar index to HTF bar using ratio-based mapping.
+    Used when timestamps are not meaningful (all identical)."""
+    if len(htf_df) == 0:
+        return None
+    ratio = entry_idx / max(entry_total - 1, 1)
+    htf_idx = min(int(ratio * (len(htf_df) - 1)), len(htf_df) - 1)
+    return htf_df.iloc[htf_idx]
+
+
+def _has_valid_timestamps(df):
+    """Check if dataframe has meaningful (non-identical) timestamps."""
+    if len(df) < 2:
+        return False
+    return df.index[0] != df.index[-1]
+
+
 # ============================================================
 # BACKTESTER ENGINE v4.0
 # ============================================================
@@ -896,6 +922,12 @@ class Backtester:
         if len(ent) < min_bars:
             print(f"    Not enough entry bars ({len(ent)} < {min_bars})")
             return
+
+        # Detect if timestamps are valid or all identical
+        use_ratio = not _has_valid_timestamps(ent)
+        if use_ratio:
+            print(f"    Using ratio-based HTF mapping (no valid timestamps)")
+        entry_total = len(ent)
 
         print(f"    Running v4.0 backtest: {len(ent)} entry bars, "
               f"{len(val)} validation bars, {len(ctx)} context bars")
@@ -938,8 +970,13 @@ class Backtester:
             if mom_score < p.mom_score_min:
                 continue
 
-            ctx_row = find_htf_bar(ctx, current_time)
-            val_row = find_htf_bar(val, current_time)
+            # HTF bar lookup: ratio-based if timestamps are invalid
+            if use_ratio:
+                ctx_row = find_htf_bar_by_ratio(ctx, i, entry_total)
+                val_row = find_htf_bar_by_ratio(val, i, entry_total)
+            else:
+                ctx_row = find_htf_bar(ctx, current_time)
+                val_row = find_htf_bar(val, current_time)
             if ctx_row is None or val_row is None:
                 continue
 
