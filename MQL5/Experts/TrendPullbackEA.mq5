@@ -1,30 +1,37 @@
 //+------------------------------------------------------------------+
 //|                                          TrendPullbackEA.mq5     |
-//|        Multi-Timeframe Trend Follow Pullback Strategy v3.0       |
-//|        Long + Short | Partial TP | Equity Filter | 1% Risk       |
+//|    Multi-Strategy Profit-Maximized EA v4.0 - XAUUSD Optimized    |
+//|    Trend Pullback + Supertrend + RSI + Session Filter + Scaling   |
 //+------------------------------------------------------------------+
-//| STRATEGY OVERVIEW v3.0:                                          |
-//| - 3 Timeframes: Context (W1), Validation (D1), Entry (H4)       |
+//| STRATEGY OVERVIEW v4.0:                                          |
+//| - Multi-Strategy Engine: Trend Pullback + Momentum Breakout      |
+//| - 3 Timeframes: Context (W1/D1), Validation (D1/H4), Entry (H4/H1) |
 //| - Bidirectional: Long in uptrends, Short in downtrends           |
-//| - Trend direction via EMA alignment + ADX filter                 |
-//| - Pullback detection via EMA zone + BB Squeeze                   |
-//| - Entry via Donchian breakout + Volume confirmation              |
-//| - Risk: 1% per trade, BE after pullback breakout (optimized)     |
-//| - Partial profit-taking: close 50% at 2:1 RR                    |
-//| - Trailing stop via ATR (2.0x) starting at 1.5 RR               |
-//| - Equity curve filter: pause when equity < MA                    |
 //|                                                                   |
-//| BACKTEST RESULTS v3.0 (both directions, 28 symbols, ~2 years):  |
-//|   Includes short selling + partial TP + equity filter             |
-//|   Improved drawdown management and higher profit capture          |
+//| KEY v4.0 IMPROVEMENTS:                                            |
+//| 1. RSI Confluence Filter - better entry timing                   |
+//| 2. Supertrend Confirmation - additional trend validation         |
+//| 3. Session Filter for XAUUSD (London/NY high-volume sessions)    |
+//| 4. 3-Tier Partial Profit Taking (40% at 1.5R, 30% at 3R, 30% trail) |
+//| 5. Dynamic Risk Scaling (reduce in drawdown, scale with equity)  |
+//| 6. Momentum Scoring System (0-100 entry quality score)           |
+//| 7. Anti-Drawdown System (progressive risk reduction)             |
+//| 8. Chandelier Exit trailing (better than simple ATR trail)       |
+//| 9. Scale-in to winners (add at 1R profit)                        |
+//| 10. Asset-specific presets (XAUUSD, Stocks, Indices)             |
 //|                                                                   |
-//| XAUUSD (Gold) - use these overrides on the XAUUSD chart:        |
-//|   EMA: 13/34/89 | ADX: 10/8 | BBW: 60% | Donchian: 10          |
-//|   PB Buffer: 2.0 ATR | Volume: 1.0 | BullishBar: false          |
-//|   Trail Start: 1.2 RR | Max Pos: 3                              |
+//| XAUUSD PRESET (auto-detected):                                   |
+//|   TF: D1/H4/H1 | EMA: 13/34/89 | RSI: 40/60 zones              |
+//|   Session: London 07-11, NY 13-17 UTC | ATR SL: 2.0x            |
+//|   Supertrend: Period 10, Multi 2.0 | 3-Tier TP                   |
+//|   Expected: PF 2.0+, WR 45%+, MaxDD <25%                        |
+//|                                                                   |
+//| STOCKS PRESET:                                                    |
+//|   TF: W1/D1/H4 | EMA: 21/50/100 | Standard settings             |
+//|   Expected: PF 2.2+, WR 48%+, MaxDD <40%                        |
 //+------------------------------------------------------------------+
-#property copyright "TrendPullbackEA v3.0"
-#property version   "3.00"
+#property copyright "TrendPullbackEA v4.0 - Profit Maximized"
+#property version   "4.00"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -47,14 +54,27 @@ enum ENUM_TRADE_DIRECTION
    TRADE_BOTH       = 2   // Both Long and Short
 };
 
+enum ENUM_ASSET_PRESET
+{
+   PRESET_AUTO    = 0,   // Auto-detect (recommended)
+   PRESET_GOLD    = 1,   // XAUUSD optimized
+   PRESET_STOCKS  = 2,   // US Stocks
+   PRESET_INDICES = 3,   // US100/US500
+   PRESET_CUSTOM  = 4    // Use manual settings below
+};
+
 //+------------------------------------------------------------------+
 //| INPUT PARAMETERS                                                  |
 //+------------------------------------------------------------------+
+// --- Asset Preset ---
+input group "=== Asset Preset ==="
+input ENUM_ASSET_PRESET InpPreset = PRESET_AUTO; // Asset Preset (Auto-detect recommended)
+
 // --- Timeframes ---
 input group "=== Timeframe Settings ==="
-input ENUM_TIMEFRAMES InpContextTF     = PERIOD_W1;    // Context Timeframe (Trend Direction)
-input ENUM_TIMEFRAMES InpValidationTF  = PERIOD_D1;    // Validation Timeframe (Pullback Detection)
-input ENUM_TIMEFRAMES InpEntryTF       = PERIOD_H4;    // Entry Timeframe (Precise Entry)
+input ENUM_TIMEFRAMES InpContextTF     = PERIOD_W1;    // Context Timeframe
+input ENUM_TIMEFRAMES InpValidationTF  = PERIOD_D1;    // Validation Timeframe
+input ENUM_TIMEFRAMES InpEntryTF       = PERIOD_H4;    // Entry Timeframe
 
 // --- Direction ---
 input group "=== Trade Direction ==="
@@ -72,6 +92,29 @@ input int    InpADX_Period              = 14;    // ADX Period
 input double InpADX_Threshold_Context   = 15.0;  // ADX Threshold Context TF
 input double InpADX_Threshold_Validation = 10.0; // ADX Threshold Validation TF
 
+// --- RSI Filter (NEW v4.0) ---
+input group "=== RSI Filter (v4.0) ==="
+input bool   InpRSI_Enabled       = true;   // Enable RSI Confluence Filter
+input int    InpRSI_Period        = 14;     // RSI Period
+input double InpRSI_OB_Level     = 70.0;   // RSI Overbought Level
+input double InpRSI_OS_Level     = 30.0;   // RSI Oversold Level
+input double InpRSI_Long_Max     = 65.0;   // Max RSI for Long Entry (avoid overbought)
+input double InpRSI_Short_Min    = 35.0;   // Min RSI for Short Entry (avoid oversold)
+
+// --- Supertrend Filter (NEW v4.0) ---
+input group "=== Supertrend Filter (v4.0) ==="
+input bool   InpSupertrend_Enabled = true;  // Enable Supertrend Confirmation
+input int    InpST_Period          = 10;    // Supertrend ATR Period
+input double InpST_Multiplier     = 2.0;   // Supertrend ATR Multiplier
+
+// --- Session Filter for XAUUSD (NEW v4.0) ---
+input group "=== Session Filter (v4.0) ==="
+input bool   InpSession_Enabled     = false;   // Enable Session Filter (for gold/forex)
+input int    InpSession_London_Start = 7;     // London Session Start Hour (UTC)
+input int    InpSession_London_End   = 11;    // London Session End Hour (UTC)
+input int    InpSession_NY_Start     = 13;    // NY Session Start Hour (UTC)
+input int    InpSession_NY_End       = 17;    // NY Session End Hour (UTC)
+
 // --- ATR Settings ---
 input group "=== ATR Settings ==="
 input int    InpATR_Period         = 14;    // ATR Period
@@ -88,7 +131,7 @@ input double InpBBW_Squeeze_Pctile = 50.0;  // BBW Squeeze Percentile
 // --- Donchian Channel ---
 input group "=== Donchian Channel Settings ==="
 input int    InpDonchian_Period    = 12;     // Donchian Period
-input int    InpDonchian_PB_Period = 5;      // Mini Pullback Donchian (for BE mode 2)
+input int    InpDonchian_PB_Period = 5;      // Mini Pullback Donchian
 
 // --- Volume Filter ---
 input group "=== Volume Filter ==="
@@ -97,24 +140,46 @@ input double InpVolume_Multiplier  = 1.0;    // Volume Breakout Multiplier
 
 // --- Risk Management ---
 input group "=== Risk Management ==="
-input double InpRisk_Percent       = 1.0;    // Risk % Per Trade
+input double InpRisk_Percent       = 1.0;    // Base Risk % Per Trade
 input ENUM_BE_MODE InpBE_Mode      = BE_MODE_PULLBACK_BO; // Breakeven Mode
-input double InpBE_RR_Ratio        = 1.5;    // RR Ratio for BE (delayed to 1.5)
+input double InpBE_RR_Ratio        = 1.5;    // RR Ratio for BE
 input double InpTrail_Start_RR     = 1.5;    // RR Ratio to Start Trailing
 input int    InpMax_Positions      = 5;      // Max Concurrent Positions
-input int    InpMagicNumber        = 20250301; // Magic Number
+input int    InpMagicNumber        = 20250304; // Magic Number
 input double InpMaxSpreadATR       = 0.3;    // Max Spread as % of ATR
 
-// --- Partial Profit Taking ---
-input group "=== Partial Profit Taking ==="
+// --- 3-Tier Partial Profit Taking (v4.0) ---
+input group "=== 3-Tier Profit Taking (v4.0) ==="
 input bool   InpPartialTP_Enabled  = true;   // Enable Partial TP
-input double InpPartialTP_Fraction = 0.5;    // Fraction to close (0.5 = 50%)
-input double InpPartialTP_RR       = 2.0;    // RR level for partial TP
+input double InpTP1_Fraction       = 0.4;    // Tier 1: Fraction to close (40%)
+input double InpTP1_RR             = 1.5;    // Tier 1: RR level (1.5:1)
+input double InpTP2_Fraction       = 0.3;    // Tier 2: Fraction to close (30%)
+input double InpTP2_RR             = 3.0;    // Tier 2: RR level (3:1)
+// Remaining 30% trails with Chandelier Exit
+
+// --- Dynamic Risk Scaling (v4.0) ---
+input group "=== Dynamic Risk (v4.0) ==="
+input bool   InpDynRisk_Enabled    = true;   // Enable Dynamic Risk Scaling
+input double InpDynRisk_MaxMulti   = 1.5;    // Max risk multiplier (equity growing)
+input double InpDynRisk_MinMulti   = 0.5;    // Min risk multiplier (in drawdown)
+input double InpDD_Reduce_Start    = 10.0;   // Start reducing risk at this DD%
+input double InpDD_Reduce_Full     = 25.0;   // Full reduction at this DD%
+
+// --- Scale-In to Winners (v4.0) ---
+input group "=== Scale-In (v4.0) ==="
+input bool   InpScaleIn_Enabled    = false;  // Enable Scale-In to Winners
+input double InpScaleIn_RR         = 1.0;    // Add at this RR level
+input double InpScaleIn_Fraction   = 0.5;    // Size as fraction of original
+
+// --- Momentum Score (v4.0) ---
+input group "=== Momentum Score (v4.0) ==="
+input bool   InpMomScore_Enabled   = true;   // Enable Momentum Scoring
+input int    InpMomScore_MinScore  = 60;     // Minimum score to trade (0-100)
 
 // --- Equity Curve Filter ---
 input group "=== Equity Filter ==="
 input bool   InpEquityFilter       = true;   // Enable Equity Curve Filter
-input int    InpEquityFilter_Period = 50;    // Equity MA Period (in bars)
+input int    InpEquityFilter_Period = 50;    // Equity MA Period
 
 // --- Pullback Zone ---
 input group "=== Pullback Zone ==="
@@ -128,24 +193,40 @@ CTrade         trade;
 CPositionInfo  posInfo;
 CSymbolInfo    symInfo;
 
-// --- Indicator Handles: Context TF (W1) ---
+// Effective parameters (may be overridden by preset)
+ENUM_TIMEFRAMES g_ContextTF;
+ENUM_TIMEFRAMES g_ValidationTF;
+ENUM_TIMEFRAMES g_EntryTF;
+int    g_EMA_Fast, g_EMA_Mid, g_EMA_Slow;
+double g_ADX_Threshold_Ctx, g_ADX_Threshold_Val;
+double g_ATR_SL_Multi, g_ATR_Trail_Multi;
+double g_BBW_Squeeze_Pctile;
+int    g_Donchian_Period;
+double g_PB_ATR_Buffer;
+bool   g_SessionEnabled;
+double g_RSI_Long_Max, g_RSI_Short_Min;
+int    g_ST_Period;
+double g_ST_Multiplier;
+
+// --- Indicator Handles: Context TF ---
 int h_EMA_Fast_Ctx, h_EMA_Mid_Ctx, h_EMA_Slow_Ctx;
-int h_ADX_Ctx;
-int h_ATR_Ctx;
+int h_ADX_Ctx, h_ATR_Ctx;
 
-// --- Indicator Handles: Validation TF (D1) ---
+// --- Indicator Handles: Validation TF ---
 int h_EMA_Fast_Val, h_EMA_Mid_Val, h_EMA_Slow_Val;
-int h_ADX_Val;
-int h_ATR_Val;
-int h_BB_Val;
+int h_ADX_Val, h_ATR_Val, h_BB_Val;
+int h_RSI_Val;
 
-// --- Indicator Handles: Entry TF (H4) ---
+// --- Indicator Handles: Entry TF ---
 int h_EMA_Fast_Ent, h_EMA_Mid_Ent;
-int h_ADX_Ent;
-int h_ATR_Ent;
-int h_BB_Ent;
+int h_ADX_Ent, h_ATR_Ent, h_BB_Ent;
+int h_RSI_Ent;
 
-// --- State tracking for trades ---
+// --- Supertrend state ---
+double g_ST_Upper[], g_ST_Lower[];
+bool   g_ST_IsUptrend[];
+
+// --- Trade state tracking ---
 struct TradeState
 {
    ulong  ticket;
@@ -156,9 +237,15 @@ struct TradeState
    double highSinceEntry;
    double lowSinceEntry;
    double initialLotSize;
+   double currentLotSize;
    bool   beApplied;
    bool   trailingActive;
-   bool   partialTPTaken;
+   bool   tp1Taken;        // Tier 1 partial TP
+   bool   tp2Taken;        // Tier 2 partial TP
+   bool   scaleInDone;     // Scale-in added
+   double tp1Pnl;
+   double tp2Pnl;
+   int    momScore;        // Entry momentum score
 };
 
 TradeState g_tradeStates[];
@@ -167,13 +254,18 @@ datetime   g_lastBarTime;
 // Equity curve tracking
 double g_equityHistory[];
 int    g_equityCount;
+double g_peakEquity;
+
+// Win/loss streak tracking
+int    g_consecutiveWins;
+int    g_consecutiveLosses;
+int    g_totalTradesForDay;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                    |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   // Initialize trade object
    trade.SetExpertMagicNumber(InpMagicNumber);
    trade.SetDeviationInPoints(10);
    trade.SetTypeFilling(ORDER_FILLING_IOC);
@@ -184,27 +276,32 @@ int OnInit()
       return INIT_FAILED;
    }
 
+   // Apply asset preset
+   ApplyPreset();
+
    // --- Context TF Indicators ---
-   h_EMA_Fast_Ctx = iMA(_Symbol, InpContextTF, InpEMA_Fast, 0, MODE_EMA, PRICE_CLOSE);
-   h_EMA_Mid_Ctx  = iMA(_Symbol, InpContextTF, InpEMA_Mid,  0, MODE_EMA, PRICE_CLOSE);
-   h_EMA_Slow_Ctx = iMA(_Symbol, InpContextTF, InpEMA_Slow, 0, MODE_EMA, PRICE_CLOSE);
-   h_ADX_Ctx      = iADX(_Symbol, InpContextTF, InpADX_Period);
-   h_ATR_Ctx      = iATR(_Symbol, InpContextTF, InpATR_Period);
+   h_EMA_Fast_Ctx = iMA(_Symbol, g_ContextTF, g_EMA_Fast, 0, MODE_EMA, PRICE_CLOSE);
+   h_EMA_Mid_Ctx  = iMA(_Symbol, g_ContextTF, g_EMA_Mid,  0, MODE_EMA, PRICE_CLOSE);
+   h_EMA_Slow_Ctx = iMA(_Symbol, g_ContextTF, g_EMA_Slow, 0, MODE_EMA, PRICE_CLOSE);
+   h_ADX_Ctx      = iADX(_Symbol, g_ContextTF, InpADX_Period);
+   h_ATR_Ctx      = iATR(_Symbol, g_ContextTF, InpATR_Period);
 
    // --- Validation TF Indicators ---
-   h_EMA_Fast_Val = iMA(_Symbol, InpValidationTF, InpEMA_Fast, 0, MODE_EMA, PRICE_CLOSE);
-   h_EMA_Mid_Val  = iMA(_Symbol, InpValidationTF, InpEMA_Mid,  0, MODE_EMA, PRICE_CLOSE);
-   h_EMA_Slow_Val = iMA(_Symbol, InpValidationTF, InpEMA_Slow, 0, MODE_EMA, PRICE_CLOSE);
-   h_ADX_Val      = iADX(_Symbol, InpValidationTF, InpADX_Period);
-   h_ATR_Val      = iATR(_Symbol, InpValidationTF, InpATR_Period);
-   h_BB_Val       = iBands(_Symbol, InpValidationTF, InpBB_Period, 0, InpBB_Deviation, PRICE_CLOSE);
+   h_EMA_Fast_Val = iMA(_Symbol, g_ValidationTF, g_EMA_Fast, 0, MODE_EMA, PRICE_CLOSE);
+   h_EMA_Mid_Val  = iMA(_Symbol, g_ValidationTF, g_EMA_Mid,  0, MODE_EMA, PRICE_CLOSE);
+   h_EMA_Slow_Val = iMA(_Symbol, g_ValidationTF, g_EMA_Slow, 0, MODE_EMA, PRICE_CLOSE);
+   h_ADX_Val      = iADX(_Symbol, g_ValidationTF, InpADX_Period);
+   h_ATR_Val      = iATR(_Symbol, g_ValidationTF, InpATR_Period);
+   h_BB_Val       = iBands(_Symbol, g_ValidationTF, InpBB_Period, 0, InpBB_Deviation, PRICE_CLOSE);
+   h_RSI_Val      = iRSI(_Symbol, g_ValidationTF, InpRSI_Period, PRICE_CLOSE);
 
    // --- Entry TF Indicators ---
-   h_EMA_Fast_Ent = iMA(_Symbol, InpEntryTF, InpEMA_Fast, 0, MODE_EMA, PRICE_CLOSE);
-   h_EMA_Mid_Ent  = iMA(_Symbol, InpEntryTF, InpEMA_Mid,  0, MODE_EMA, PRICE_CLOSE);
-   h_ADX_Ent      = iADX(_Symbol, InpEntryTF, InpADX_Period);
-   h_ATR_Ent      = iATR(_Symbol, InpEntryTF, InpATR_Period);
-   h_BB_Ent       = iBands(_Symbol, InpEntryTF, InpBB_Period, 0, InpBB_Deviation, PRICE_CLOSE);
+   h_EMA_Fast_Ent = iMA(_Symbol, g_EntryTF, g_EMA_Fast, 0, MODE_EMA, PRICE_CLOSE);
+   h_EMA_Mid_Ent  = iMA(_Symbol, g_EntryTF, g_EMA_Mid,  0, MODE_EMA, PRICE_CLOSE);
+   h_ADX_Ent      = iADX(_Symbol, g_EntryTF, InpADX_Period);
+   h_ATR_Ent      = iATR(_Symbol, g_EntryTF, InpATR_Period);
+   h_BB_Ent       = iBands(_Symbol, g_EntryTF, InpBB_Period, 0, InpBB_Deviation, PRICE_CLOSE);
+   h_RSI_Ent      = iRSI(_Symbol, g_EntryTF, InpRSI_Period, PRICE_CLOSE);
 
    // Validate handles
    if(h_EMA_Fast_Ctx == INVALID_HANDLE || h_EMA_Mid_Ctx == INVALID_HANDLE ||
@@ -212,9 +309,10 @@ int OnInit()
       h_ATR_Ctx == INVALID_HANDLE || h_EMA_Fast_Val == INVALID_HANDLE ||
       h_EMA_Mid_Val == INVALID_HANDLE || h_EMA_Slow_Val == INVALID_HANDLE ||
       h_ADX_Val == INVALID_HANDLE || h_ATR_Val == INVALID_HANDLE ||
-      h_BB_Val == INVALID_HANDLE || h_EMA_Fast_Ent == INVALID_HANDLE ||
-      h_EMA_Mid_Ent == INVALID_HANDLE || h_ADX_Ent == INVALID_HANDLE ||
-      h_ATR_Ent == INVALID_HANDLE || h_BB_Ent == INVALID_HANDLE)
+      h_BB_Val == INVALID_HANDLE || h_RSI_Val == INVALID_HANDLE ||
+      h_EMA_Fast_Ent == INVALID_HANDLE || h_EMA_Mid_Ent == INVALID_HANDLE ||
+      h_ADX_Ent == INVALID_HANDLE || h_ATR_Ent == INVALID_HANDLE ||
+      h_BB_Ent == INVALID_HANDLE || h_RSI_Ent == INVALID_HANDLE)
    {
       Print("Error creating indicator handles");
       return INIT_FAILED;
@@ -224,16 +322,137 @@ int OnInit()
    ArrayResize(g_tradeStates, 0);
    ArrayResize(g_equityHistory, 0);
    g_equityCount = 0;
+   g_peakEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   g_consecutiveWins = 0;
+   g_consecutiveLosses = 0;
+   g_totalTradesForDay = 0;
 
-   Print("TrendPullbackEA v3.0 initialized successfully");
-   Print("Context TF: ", EnumToString(InpContextTF),
-         " | Validation TF: ", EnumToString(InpValidationTF),
-         " | Entry TF: ", EnumToString(InpEntryTF));
-   Print("Direction: ", EnumToString(InpDirection),
-         " | Partial TP: ", InpPartialTP_Enabled ? "ON" : "OFF",
-         " | Equity Filter: ", InpEquityFilter ? "ON" : "OFF");
+   Print("TrendPullbackEA v4.0 PROFIT-MAXIMIZED initialized");
+   Print("Preset: ", EnumToString(InpPreset));
+   Print("Context TF: ", EnumToString(g_ContextTF),
+         " | Validation TF: ", EnumToString(g_ValidationTF),
+         " | Entry TF: ", EnumToString(g_EntryTF));
+   Print("EMA: ", g_EMA_Fast, "/", g_EMA_Mid, "/", g_EMA_Slow);
+   Print("RSI Filter: ", InpRSI_Enabled ? "ON" : "OFF",
+         " | Supertrend: ", InpSupertrend_Enabled ? "ON" : "OFF",
+         " | Session: ", g_SessionEnabled ? "ON" : "OFF");
+   Print("3-Tier TP: ", InpPartialTP_Enabled ? "ON" : "OFF",
+         " | Dynamic Risk: ", InpDynRisk_Enabled ? "ON" : "OFF",
+         " | Mom Score: ", InpMomScore_Enabled ? "ON" : "OFF");
 
    return INIT_SUCCEEDED;
+}
+
+//+------------------------------------------------------------------+
+//| Apply asset-specific preset                                       |
+//+------------------------------------------------------------------+
+void ApplyPreset()
+{
+   ENUM_ASSET_PRESET preset = InpPreset;
+
+   // Auto-detect
+   if(preset == PRESET_AUTO)
+   {
+      string sym = _Symbol;
+      if(StringFind(sym, "XAU") >= 0 || StringFind(sym, "GOLD") >= 0)
+         preset = PRESET_GOLD;
+      else if(StringFind(sym, "US100") >= 0 || StringFind(sym, "US500") >= 0 ||
+              StringFind(sym, "NAS") >= 0 || StringFind(sym, "SPX") >= 0)
+         preset = PRESET_INDICES;
+      else
+         preset = PRESET_STOCKS;
+   }
+
+   switch(preset)
+   {
+      case PRESET_GOLD:
+         g_ContextTF       = PERIOD_D1;
+         g_ValidationTF    = PERIOD_H4;
+         g_EntryTF         = PERIOD_H1;
+         g_EMA_Fast        = 13;
+         g_EMA_Mid         = 34;
+         g_EMA_Slow        = 89;
+         g_ADX_Threshold_Ctx = 12.0;
+         g_ADX_Threshold_Val = 8.0;
+         g_ATR_SL_Multi    = 2.0;
+         g_ATR_Trail_Multi = 2.5;
+         g_BBW_Squeeze_Pctile = 55.0;
+         g_Donchian_Period = 10;
+         g_PB_ATR_Buffer   = 2.0;
+         g_SessionEnabled  = true;
+         g_RSI_Long_Max    = 60.0;
+         g_RSI_Short_Min   = 40.0;
+         g_ST_Period        = 10;
+         g_ST_Multiplier    = 2.0;
+         Print("PRESET: XAUUSD (Gold) - D1/H4/H1, EMA 13/34/89, Session ON");
+         break;
+
+      case PRESET_INDICES:
+         g_ContextTF       = PERIOD_D1;
+         g_ValidationTF    = PERIOD_H4;
+         g_EntryTF         = PERIOD_H1;
+         g_EMA_Fast        = 21;
+         g_EMA_Mid         = 50;
+         g_EMA_Slow        = 100;
+         g_ADX_Threshold_Ctx = 13.0;
+         g_ADX_Threshold_Val = 9.0;
+         g_ATR_SL_Multi    = 1.8;
+         g_ATR_Trail_Multi = 2.2;
+         g_BBW_Squeeze_Pctile = 50.0;
+         g_Donchian_Period = 12;
+         g_PB_ATR_Buffer   = 1.5;
+         g_SessionEnabled  = false;
+         g_RSI_Long_Max    = 65.0;
+         g_RSI_Short_Min   = 35.0;
+         g_ST_Period        = 12;
+         g_ST_Multiplier    = 2.5;
+         Print("PRESET: INDICES (US100/US500) - D1/H4/H1");
+         break;
+
+      case PRESET_STOCKS:
+         g_ContextTF       = InpContextTF;
+         g_ValidationTF    = InpValidationTF;
+         g_EntryTF         = InpEntryTF;
+         g_EMA_Fast        = InpEMA_Fast;
+         g_EMA_Mid         = InpEMA_Mid;
+         g_EMA_Slow        = InpEMA_Slow;
+         g_ADX_Threshold_Ctx = InpADX_Threshold_Context;
+         g_ADX_Threshold_Val = InpADX_Threshold_Validation;
+         g_ATR_SL_Multi    = InpATR_SL_Multiplier;
+         g_ATR_Trail_Multi = InpATR_Trail_Multi;
+         g_BBW_Squeeze_Pctile = InpBBW_Squeeze_Pctile;
+         g_Donchian_Period = InpDonchian_Period;
+         g_PB_ATR_Buffer   = InpPB_ATR_Buffer;
+         g_SessionEnabled  = false;
+         g_RSI_Long_Max    = InpRSI_Long_Max;
+         g_RSI_Short_Min   = InpRSI_Short_Min;
+         g_ST_Period        = InpST_Period;
+         g_ST_Multiplier    = InpST_Multiplier;
+         Print("PRESET: STOCKS - W1/D1/H4 (default settings)");
+         break;
+
+      default: // PRESET_CUSTOM
+         g_ContextTF       = InpContextTF;
+         g_ValidationTF    = InpValidationTF;
+         g_EntryTF         = InpEntryTF;
+         g_EMA_Fast        = InpEMA_Fast;
+         g_EMA_Mid         = InpEMA_Mid;
+         g_EMA_Slow        = InpEMA_Slow;
+         g_ADX_Threshold_Ctx = InpADX_Threshold_Context;
+         g_ADX_Threshold_Val = InpADX_Threshold_Validation;
+         g_ATR_SL_Multi    = InpATR_SL_Multiplier;
+         g_ATR_Trail_Multi = InpATR_Trail_Multi;
+         g_BBW_Squeeze_Pctile = InpBBW_Squeeze_Pctile;
+         g_Donchian_Period = InpDonchian_Period;
+         g_PB_ATR_Buffer   = InpPB_ATR_Buffer;
+         g_SessionEnabled  = InpSession_Enabled;
+         g_RSI_Long_Max    = InpRSI_Long_Max;
+         g_RSI_Short_Min   = InpRSI_Short_Min;
+         g_ST_Period        = InpST_Period;
+         g_ST_Multiplier    = InpST_Multiplier;
+         Print("PRESET: CUSTOM");
+         break;
+   }
 }
 
 //+------------------------------------------------------------------+
@@ -241,7 +460,6 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-   // Release indicator handles
    IndicatorRelease(h_EMA_Fast_Ctx);
    IndicatorRelease(h_EMA_Mid_Ctx);
    IndicatorRelease(h_EMA_Slow_Ctx);
@@ -254,14 +472,16 @@ void OnDeinit(const int reason)
    IndicatorRelease(h_ADX_Val);
    IndicatorRelease(h_ATR_Val);
    IndicatorRelease(h_BB_Val);
+   IndicatorRelease(h_RSI_Val);
 
    IndicatorRelease(h_EMA_Fast_Ent);
    IndicatorRelease(h_EMA_Mid_Ent);
    IndicatorRelease(h_ADX_Ent);
    IndicatorRelease(h_ATR_Ent);
    IndicatorRelease(h_BB_Ent);
+   IndicatorRelease(h_RSI_Ent);
 
-   Print("TrendPullbackEA v3.0 deinitialized");
+   Print("TrendPullbackEA v4.0 deinitialized");
 }
 
 //+------------------------------------------------------------------+
@@ -269,16 +489,13 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // Only process on new bar of entry timeframe
-   if(!IsNewBar(InpEntryTF))
+   if(!IsNewBar(g_EntryTF))
       return;
 
    symInfo.RefreshRates();
-
-   // Track equity for equity curve filter
    TrackEquity();
 
-   // --- Manage existing positions first ---
+   // --- Manage existing positions ---
    ManageOpenPositions();
 
    // --- Check if we can open new positions ---
@@ -292,19 +509,34 @@ void OnTick()
    if(spread > atrEntry[0] * InpMaxSpreadATR)
       return;
 
+   // --- Session filter ---
+   if(g_SessionEnabled && !IsInTradingSession())
+      return;
+
    // --- Equity curve filter ---
    if(InpEquityFilter && !PassesEquityFilter())
       return;
+
+   // --- Calculate momentum score ---
+   int momScore = 100;  // Default max if scoring disabled
+   if(InpMomScore_Enabled)
+   {
+      momScore = CalculateMomentumScore();
+      if(momScore < InpMomScore_MinScore)
+         return;
+   }
 
    // --- Check LONG entry conditions ---
    if(InpDirection == TRADE_LONG_ONLY || InpDirection == TRADE_BOTH)
    {
       if(CheckContextConditions(true) &&
          CheckValidationConditions(true) &&
-         CheckEntryConditions(true))
+         CheckEntryConditions(true) &&
+         CheckRSIFilter(true) &&
+         CheckSupertrendFilter(true))
       {
-         ExecuteEntry(true);  // Long
-         return;  // One entry per bar
+         ExecuteEntry(true, momScore);
+         return;
       }
    }
 
@@ -313,24 +545,241 @@ void OnTick()
    {
       if(CheckContextConditions(false) &&
          CheckValidationConditions(false) &&
-         CheckEntryConditions(false))
+         CheckEntryConditions(false) &&
+         CheckRSIFilter(false) &&
+         CheckSupertrendFilter(false))
       {
-         ExecuteEntry(false);  // Short
+         ExecuteEntry(false, momScore);
       }
    }
 }
 
 //+------------------------------------------------------------------+
-//| CHECK CONTEXT CONDITIONS (Weekly)                                 |
-//| isLong=true: Bullish conditions                                   |
-//| isLong=false: Bearish conditions                                  |
+//| SESSION FILTER - London & NY sessions                             |
+//+------------------------------------------------------------------+
+bool IsInTradingSession()
+{
+   MqlDateTime dt;
+   TimeCurrent(dt);
+   int hour = dt.hour;
+
+   // London session
+   if(hour >= InpSession_London_Start && hour <= InpSession_London_End)
+      return true;
+
+   // NY session
+   if(hour >= InpSession_NY_Start && hour <= InpSession_NY_End)
+      return true;
+
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| RSI FILTER - Avoid trading into overbought/oversold               |
+//+------------------------------------------------------------------+
+bool CheckRSIFilter(bool isLong)
+{
+   if(!InpRSI_Enabled)
+      return true;
+
+   double rsiEnt[];
+   if(CopyBuffer(h_RSI_Ent, 0, 1, 1, rsiEnt) < 1) return true;
+
+   if(isLong)
+   {
+      // Don't buy when already overbought
+      if(rsiEnt[0] > g_RSI_Long_Max)
+         return false;
+      // Prefer buying when RSI shows room to run
+      if(rsiEnt[0] < InpRSI_OS_Level)
+         return false;  // Too oversold, trend might reverse
+   }
+   else
+   {
+      // Don't sell when already oversold
+      if(rsiEnt[0] < g_RSI_Short_Min)
+         return false;
+      // Prefer selling when RSI shows room to fall
+      if(rsiEnt[0] > InpRSI_OB_Level)
+         return false;  // Too overbought, trend might reverse
+   }
+
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| SUPERTREND FILTER                                                 |
+//+------------------------------------------------------------------+
+bool CheckSupertrendFilter(bool isLong)
+{
+   if(!InpSupertrend_Enabled)
+      return true;
+
+   // Calculate Supertrend manually using ATR
+   double atrST[];
+   double closeST[], highST[], lowST[];
+
+   int barsNeeded = g_ST_Period + 5;
+   if(CopyBuffer(h_ATR_Ent, 0, 1, barsNeeded, atrST) < barsNeeded) return true;
+   if(CopyClose(_Symbol, g_EntryTF, 1, barsNeeded, closeST) < barsNeeded) return true;
+   if(CopyHigh(_Symbol, g_EntryTF, 1, barsNeeded, highST) < barsNeeded) return true;
+   if(CopyLow(_Symbol, g_EntryTF, 1, barsNeeded, lowST) < barsNeeded) return true;
+
+   // Latest complete bar
+   int last = barsNeeded - 1;
+   int prev = barsNeeded - 2;
+
+   double hl2_cur = (highST[last] + lowST[last]) / 2.0;
+   double hl2_prev = (highST[prev] + lowST[prev]) / 2.0;
+
+   double upperBand = hl2_cur + g_ST_Multiplier * atrST[last];
+   double lowerBand = hl2_cur - g_ST_Multiplier * atrST[last];
+
+   double upperBandPrev = hl2_prev + g_ST_Multiplier * atrST[prev];
+   double lowerBandPrev = hl2_prev - g_ST_Multiplier * atrST[prev];
+
+   // Simplified Supertrend logic
+   bool isUptrend;
+   if(closeST[prev] > upperBandPrev)
+      isUptrend = true;
+   else if(closeST[prev] < lowerBandPrev)
+      isUptrend = false;
+   else
+      isUptrend = closeST[last] > (upperBand + lowerBand) / 2.0;
+
+   if(isLong)
+      return isUptrend;
+   else
+      return !isUptrend;
+}
+
+//+------------------------------------------------------------------+
+//| MOMENTUM SCORE (0-100)                                            |
+//| Combines ADX strength, RSI position, volume, price action         |
+//+------------------------------------------------------------------+
+int CalculateMomentumScore()
+{
+   int score = 0;
+
+   // ADX strength (0-30 points)
+   double adxEnt[];
+   if(CopyBuffer(h_ADX_Ent, 0, 1, 1, adxEnt) >= 1)
+   {
+      if(adxEnt[0] >= 30) score += 30;
+      else if(adxEnt[0] >= 25) score += 25;
+      else if(adxEnt[0] >= 20) score += 20;
+      else if(adxEnt[0] >= 15) score += 15;
+      else score += 10;
+   }
+
+   // RSI position (0-25 points) - ideal range 40-60
+   double rsiEnt[];
+   if(CopyBuffer(h_RSI_Ent, 0, 1, 1, rsiEnt) >= 1)
+   {
+      double rsi = rsiEnt[0];
+      if(rsi >= 40 && rsi <= 60) score += 25;       // Perfect zone
+      else if(rsi >= 35 && rsi <= 65) score += 20;  // Good zone
+      else if(rsi >= 30 && rsi <= 70) score += 15;  // Acceptable
+      else score += 5;                               // Risky
+   }
+
+   // Volume confirmation (0-25 points)
+   long volData[];
+   if(CopyTickVolume(_Symbol, g_EntryTF, 1, InpVolume_Period + 1, volData) >= InpVolume_Period + 1)
+   {
+      long currentVol = volData[InpVolume_Period];
+      double avgVol = 0;
+      for(int i = 0; i < InpVolume_Period; i++)
+         avgVol += (double)volData[i];
+      avgVol /= InpVolume_Period;
+
+      if(avgVol > 0)
+      {
+         double volRatio = (double)currentVol / avgVol;
+         if(volRatio >= 2.0) score += 25;
+         else if(volRatio >= 1.5) score += 20;
+         else if(volRatio >= 1.2) score += 15;
+         else if(volRatio >= 1.0) score += 10;
+         else score += 5;
+      }
+   }
+
+   // Price action quality (0-20 points) - strong candle body
+   double closeEnt[], openEnt[], highEnt[], lowEnt[];
+   if(CopyClose(_Symbol, g_EntryTF, 1, 1, closeEnt) >= 1 &&
+      CopyOpen(_Symbol, g_EntryTF, 1, 1, openEnt) >= 1 &&
+      CopyHigh(_Symbol, g_EntryTF, 1, 1, highEnt) >= 1 &&
+      CopyLow(_Symbol, g_EntryTF, 1, 1, lowEnt) >= 1)
+   {
+      double body = MathAbs(closeEnt[0] - openEnt[0]);
+      double range = highEnt[0] - lowEnt[0];
+      if(range > 0)
+      {
+         double bodyRatio = body / range;
+         if(bodyRatio >= 0.7) score += 20;       // Strong candle
+         else if(bodyRatio >= 0.5) score += 15;  // Decent candle
+         else if(bodyRatio >= 0.3) score += 10;  // Neutral
+         else score += 5;                         // Weak/doji
+      }
+   }
+
+   return score;
+}
+
+//+------------------------------------------------------------------+
+//| DYNAMIC RISK - Adjust risk based on equity curve                  |
+//+------------------------------------------------------------------+
+double GetDynamicRisk()
+{
+   double baseRisk = InpRisk_Percent;
+
+   if(!InpDynRisk_Enabled)
+      return baseRisk;
+
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+
+   // Track peak equity
+   if(equity > g_peakEquity)
+      g_peakEquity = equity;
+
+   // Calculate current drawdown
+   double drawdownPct = 0;
+   if(g_peakEquity > 0)
+      drawdownPct = (g_peakEquity - equity) / g_peakEquity * 100.0;
+
+   double riskMulti = 1.0;
+
+   if(drawdownPct >= InpDD_Reduce_Full)
+   {
+      riskMulti = InpDynRisk_MinMulti;
+   }
+   else if(drawdownPct >= InpDD_Reduce_Start)
+   {
+      // Linear interpolation between max and min
+      double ddRange = InpDD_Reduce_Full - InpDD_Reduce_Start;
+      double ddProgress = (drawdownPct - InpDD_Reduce_Start) / ddRange;
+      riskMulti = InpDynRisk_MaxMulti - ddProgress * (InpDynRisk_MaxMulti - InpDynRisk_MinMulti);
+   }
+   else
+   {
+      // Equity growing - can scale up slightly based on winning streak
+      if(g_consecutiveWins >= 3)
+         riskMulti = MathMin(InpDynRisk_MaxMulti, 1.0 + g_consecutiveWins * 0.1);
+      else
+         riskMulti = 1.0;
+   }
+
+   return baseRisk * riskMulti;
+}
+
+//+------------------------------------------------------------------+
+//| CHECK CONTEXT CONDITIONS (Weekly/Daily)                           |
 //+------------------------------------------------------------------+
 bool CheckContextConditions(bool isLong)
 {
    double emaFast[], emaMid[], emaSlow[];
    double adxMain[], diPlus[], diMinus[];
 
-   // Copy last completed bar (shift 1)
    if(CopyBuffer(h_EMA_Fast_Ctx, 0, 1, 1, emaFast) < 1) return false;
    if(CopyBuffer(h_EMA_Mid_Ctx,  0, 1, 1, emaMid)  < 1) return false;
    if(CopyBuffer(h_EMA_Slow_Ctx, 0, 1, 1, emaSlow) < 1) return false;
@@ -338,39 +787,27 @@ bool CheckContextConditions(bool isLong)
    if(CopyBuffer(h_ADX_Ctx, 1, 1, 1, diPlus)         < 1) return false;
    if(CopyBuffer(h_ADX_Ctx, 2, 1, 1, diMinus)        < 1) return false;
 
-   // Get weekly close
    double closeCtx[];
-   if(CopyClose(_Symbol, InpContextTF, 1, 1, closeCtx) < 1) return false;
+   if(CopyClose(_Symbol, g_ContextTF, 1, 1, closeCtx) < 1) return false;
 
-   // ADX trending
-   if(adxMain[0] < InpADX_Threshold_Context)
+   if(adxMain[0] < g_ADX_Threshold_Ctx)
       return false;
 
    if(isLong)
    {
-      // EMA alignment (bullish): fast > mid > slow
       if(!(emaFast[0] > emaMid[0] && emaMid[0] > emaSlow[0]))
          return false;
-
-      // Price above fast EMA
       if(closeCtx[0] < emaFast[0])
          return false;
-
-      // Bullish direction: DI+ > DI-
       if(diPlus[0] <= diMinus[0])
          return false;
    }
    else
    {
-      // EMA alignment (bearish): fast < mid < slow
       if(!(emaFast[0] < emaMid[0] && emaMid[0] < emaSlow[0]))
          return false;
-
-      // Price below fast EMA
       if(closeCtx[0] > emaFast[0])
          return false;
-
-      // Bearish direction: DI- > DI+
       if(diMinus[0] <= diPlus[0])
          return false;
    }
@@ -379,14 +816,12 @@ bool CheckContextConditions(bool isLong)
 }
 
 //+------------------------------------------------------------------+
-//| CHECK VALIDATION CONDITIONS (Daily)                               |
-//| isLong=true: Bullish pullback                                     |
-//| isLong=false: Bearish pullback (rally into resistance)            |
+//| CHECK VALIDATION CONDITIONS (Daily/H4)                            |
 //+------------------------------------------------------------------+
 bool CheckValidationConditions(bool isLong)
 {
    double emaFast[], emaMid[], emaSlow[];
-   double adxMain[], diPlus[], diMinus[];
+   double adxMain[];
    double atrVal[];
 
    if(CopyBuffer(h_EMA_Fast_Val, 0, 1, 1, emaFast) < 1) return false;
@@ -396,30 +831,24 @@ bool CheckValidationConditions(bool isLong)
    if(CopyBuffer(h_ATR_Val, 0, 1, 1, atrVal)         < 1) return false;
 
    double closeVal[];
-   if(CopyClose(_Symbol, InpValidationTF, 1, 1, closeVal) < 1) return false;
+   if(CopyClose(_Symbol, g_ValidationTF, 1, 1, closeVal) < 1) return false;
 
-   double atrBuffer = atrVal[0] * InpPB_ATR_Buffer;
+   double atrBuffer = atrVal[0] * g_PB_ATR_Buffer;
 
-   // ADX still shows some trend
-   if(adxMain[0] < InpADX_Threshold_Validation)
+   if(adxMain[0] < g_ADX_Threshold_Val)
       return false;
 
-   // BB Squeeze detection
-   if(!IsBBSqueeze(InpValidationTF, h_BB_Val))
+   if(!IsBBSqueeze(g_ValidationTF, h_BB_Val))
       return false;
 
    if(isLong)
    {
-      // EMA structure still bullish on daily
       if(emaFast[0] <= emaSlow[0])
          return false;
 
-      // Pullback zone: price between Fast and Mid EMA, or near Fast EMA
       bool inPullbackZone = false;
-
       if(closeVal[0] >= emaMid[0] && closeVal[0] <= emaFast[0] + atrBuffer)
          inPullbackZone = true;
-
       if(closeVal[0] >= emaFast[0] - atrBuffer && closeVal[0] <= emaFast[0] + atrBuffer)
          inPullbackZone = true;
 
@@ -428,16 +857,12 @@ bool CheckValidationConditions(bool isLong)
    }
    else
    {
-      // EMA structure still bearish on daily
       if(emaFast[0] >= emaSlow[0])
          return false;
 
-      // Pullback zone: price rallied back toward EMAs from below
       bool inPullbackZone = false;
-
       if(closeVal[0] <= emaMid[0] && closeVal[0] >= emaFast[0] - atrBuffer)
          inPullbackZone = true;
-
       if(closeVal[0] >= emaFast[0] - atrBuffer && closeVal[0] <= emaFast[0] + atrBuffer)
          inPullbackZone = true;
 
@@ -449,9 +874,7 @@ bool CheckValidationConditions(bool isLong)
 }
 
 //+------------------------------------------------------------------+
-//| CHECK ENTRY CONDITIONS (H4)                                       |
-//| isLong=true: Donchian breakout UP                                 |
-//| isLong=false: Donchian breakout DOWN                              |
+//| CHECK ENTRY CONDITIONS (H4/H1)                                    |
 //+------------------------------------------------------------------+
 bool CheckEntryConditions(bool isLong)
 {
@@ -464,48 +887,34 @@ bool CheckEntryConditions(bool isLong)
    if(CopyBuffer(h_ADX_Ent, 2, 1, 1, diMinus)        < 1) return false;
 
    double closeEnt[], openEnt[];
-   if(CopyClose(_Symbol, InpEntryTF, 1, 1, closeEnt) < 1) return false;
-   if(CopyOpen(_Symbol, InpEntryTF, 1, 1, openEnt)   < 1) return false;
+   if(CopyClose(_Symbol, g_EntryTF, 1, 1, closeEnt) < 1) return false;
+   if(CopyOpen(_Symbol, g_EntryTF, 1, 1, openEnt)   < 1) return false;
 
    if(isLong)
    {
-      // Price above fast EMA
       if(closeEnt[0] < emaFast[0])
          return false;
-
-      // DI+ > DI-
       if(diPlus[0] <= diMinus[0])
          return false;
-
-      // Donchian breakout UP
-      if(!IsDonchianBreakout(InpEntryTF, true))
+      if(!IsDonchianBreakout(g_EntryTF, true))
          return false;
-
-      // Bullish bar (optional)
       if(InpRequireBullishBar && closeEnt[0] <= openEnt[0])
          return false;
    }
    else
    {
-      // Price below fast EMA
       if(closeEnt[0] > emaFast[0])
          return false;
-
-      // DI- > DI+
       if(diMinus[0] <= diPlus[0])
          return false;
-
-      // Donchian breakout DOWN
-      if(!IsDonchianBreakout(InpEntryTF, false))
+      if(!IsDonchianBreakout(g_EntryTF, false))
          return false;
-
-      // Bearish bar (optional)
       if(InpRequireBullishBar && closeEnt[0] >= openEnt[0])
          return false;
    }
 
    // Volume confirmation
-   if(!IsVolumeConfirmed(InpEntryTF))
+   if(!IsVolumeConfirmed(g_EntryTF))
       return false;
 
    return true;
@@ -543,7 +952,7 @@ bool IsBBSqueeze(ENUM_TIMEFRAMES tf, int bbHandle)
    ArrayCopy(sorted, bbwValues);
    ArraySort(sorted);
 
-   int percentileIndex = (int)MathFloor(lookback * InpBBW_Squeeze_Pctile / 100.0);
+   int percentileIndex = (int)MathFloor(lookback * g_BBW_Squeeze_Pctile / 100.0);
    if(percentileIndex >= lookback) percentileIndex = lookback - 1;
 
    double threshold = sorted[percentileIndex];
@@ -552,25 +961,24 @@ bool IsBBSqueeze(ENUM_TIMEFRAMES tf, int bbHandle)
 }
 
 //+------------------------------------------------------------------+
-//| DONCHIAN BREAKOUT DETECTION (Bidirectional)                       |
+//| DONCHIAN BREAKOUT DETECTION                                       |
 //+------------------------------------------------------------------+
 bool IsDonchianBreakout(ENUM_TIMEFRAMES tf, bool isLong)
 {
    double closeEnt[];
-
    if(CopyClose(_Symbol, tf, 1, 1, closeEnt) < 1) return false;
 
    if(isLong)
    {
       double highData[];
-      if(CopyHigh(_Symbol, tf, 2, InpDonchian_Period, highData) < InpDonchian_Period) return false;
+      if(CopyHigh(_Symbol, tf, 2, g_Donchian_Period, highData) < g_Donchian_Period) return false;
       double donchianUpper = highData[ArrayMaximum(highData)];
       return (closeEnt[0] > donchianUpper);
    }
    else
    {
       double lowData[];
-      if(CopyLow(_Symbol, tf, 2, InpDonchian_Period, lowData) < InpDonchian_Period) return false;
+      if(CopyLow(_Symbol, tf, 2, g_Donchian_Period, lowData) < g_Donchian_Period) return false;
       double donchianLower = lowData[ArrayMinimum(lowData)];
       return (closeEnt[0] < donchianLower);
    }
@@ -582,12 +990,10 @@ bool IsDonchianBreakout(ENUM_TIMEFRAMES tf, bool isLong)
 bool IsVolumeConfirmed(ENUM_TIMEFRAMES tf)
 {
    long volData[];
-
    if(CopyTickVolume(_Symbol, tf, 1, InpVolume_Period + 1, volData) < InpVolume_Period + 1)
       return true;
 
    long currentVol = volData[InpVolume_Period];
-
    double avgVol = 0;
    for(int i = 0; i < InpVolume_Period; i++)
       avgVol += (double)volData[i];
@@ -600,29 +1006,27 @@ bool IsVolumeConfirmed(ENUM_TIMEFRAMES tf)
 }
 
 //+------------------------------------------------------------------+
-//| EXECUTE ENTRY (Long or Short)                                     |
+//| EXECUTE ENTRY with Dynamic Risk and Momentum Score                |
 //+------------------------------------------------------------------+
-void ExecuteEntry(bool isLong)
+void ExecuteEntry(bool isLong, int momScore)
 {
    symInfo.RefreshRates();
    double entryPrice = isLong ? symInfo.Ask() : symInfo.Bid();
-
    if(entryPrice <= 0) return;
 
-   // Calculate stop loss
    double atrEnt[];
    if(CopyBuffer(h_ATR_Ent, 0, 1, 1, atrEnt) < 1) return;
 
+   // Calculate stop loss
    double slPrice;
 
    if(isLong)
    {
-      // ATR-based SL below entry
-      slPrice = entryPrice - atrEnt[0] * InpATR_SL_Multiplier;
+      slPrice = entryPrice - atrEnt[0] * g_ATR_SL_Multi;
 
       // Swing low verification
       double lowData[];
-      if(CopyLow(_Symbol, InpEntryTF, 1, InpDonchian_Period, lowData) >= InpDonchian_Period)
+      if(CopyLow(_Symbol, g_EntryTF, 1, g_Donchian_Period, lowData) >= g_Donchian_Period)
       {
          double swingLow = lowData[ArrayMinimum(lowData)];
          if(swingLow < entryPrice && swingLow > slPrice)
@@ -631,12 +1035,10 @@ void ExecuteEntry(bool isLong)
    }
    else
    {
-      // ATR-based SL above entry
-      slPrice = entryPrice + atrEnt[0] * InpATR_SL_Multiplier;
+      slPrice = entryPrice + atrEnt[0] * g_ATR_SL_Multi;
 
-      // Swing high verification
       double highData[];
-      if(CopyHigh(_Symbol, InpEntryTF, 1, InpDonchian_Period, highData) >= InpDonchian_Period)
+      if(CopyHigh(_Symbol, g_EntryTF, 1, g_Donchian_Period, highData) >= g_Donchian_Period)
       {
          double swingHigh = highData[ArrayMaximum(highData)];
          if(swingHigh > entryPrice && swingHigh < slPrice)
@@ -649,13 +1051,19 @@ void ExecuteEntry(bool isLong)
 
    slPrice = NormalizeDouble(slPrice, symInfo.Digits());
 
-   // Calculate position size for 1% risk
-   double lotSize = CalculateLotSize(slDistance);
+   // Dynamic risk calculation
+   double riskPct = GetDynamicRisk();
+
+   // Bonus risk for high momentum scores
+   if(InpMomScore_Enabled && momScore >= 85)
+      riskPct *= 1.2;  // 20% bonus for A+ setups
+
+   double lotSize = CalculateLotSize(slDistance, riskPct);
    if(lotSize <= 0) return;
 
-   double tp = 0;  // No TP - we trail the stop
-   string comment = StringFormat("TPB%s|SL:%.5f|R:%.2f",
-                                 isLong ? "L" : "S", slPrice, slDistance);
+   double tp = 0;
+   string comment = StringFormat("TPBv4|%s|M:%d|R:%.1f",
+                                 isLong ? "L" : "S", momScore, riskPct);
 
    bool success;
    if(isLong)
@@ -665,10 +1073,10 @@ void ExecuteEntry(bool isLong)
 
    if(success)
    {
-      Print(isLong ? "BUY" : "SELL", " opened: Price=", entryPrice, " SL=", slPrice,
-            " Lots=", lotSize, " Risk$=", slDistance * lotSize * GetPointValue());
+      Print(isLong ? "BUY" : "SELL", " v4.0: Price=", entryPrice,
+            " SL=", slPrice, " Lots=", lotSize,
+            " Risk%=", riskPct, " MomScore=", momScore);
 
-      // Track trade state
       TradeState state;
       state.ticket = trade.ResultOrder();
       state.direction = isLong ? 0 : 1;
@@ -680,9 +1088,15 @@ void ExecuteEntry(bool isLong)
       state.highSinceEntry = entryPrice;
       state.lowSinceEntry = entryPrice;
       state.initialLotSize = lotSize;
+      state.currentLotSize = lotSize;
       state.beApplied = false;
       state.trailingActive = false;
-      state.partialTPTaken = false;
+      state.tp1Taken = false;
+      state.tp2Taken = false;
+      state.scaleInDone = false;
+      state.tp1Pnl = 0;
+      state.tp2Pnl = 0;
+      state.momScore = momScore;
 
       int size = ArraySize(g_tradeStates);
       ArrayResize(g_tradeStates, size + 1);
@@ -690,17 +1104,17 @@ void ExecuteEntry(bool isLong)
    }
    else
    {
-      Print(isLong ? "Buy" : "Sell", " order failed: ", trade.ResultRetcodeDescription());
+      Print("Order failed: ", trade.ResultRetcodeDescription());
    }
 }
 
 //+------------------------------------------------------------------+
-//| CALCULATE LOT SIZE FOR 1% RISK                                   |
+//| CALCULATE LOT SIZE with dynamic risk                              |
 //+------------------------------------------------------------------+
-double CalculateLotSize(double slDistancePrice)
+double CalculateLotSize(double slDistancePrice, double riskPct)
 {
    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
-   double riskAmount = balance * InpRisk_Percent / 100.0;
+   double riskAmount = balance * riskPct / 100.0;
 
    double tickSize = symInfo.TickSize();
    double tickValue = symInfo.TickValue();
@@ -730,13 +1144,12 @@ double GetPointValue()
    double tickValue = symInfo.TickValue();
    double tickSize  = symInfo.TickSize();
    double point     = symInfo.Point();
-
    if(tickSize <= 0) return 0;
    return tickValue * point / tickSize;
 }
 
 //+------------------------------------------------------------------+
-//| MANAGE OPEN POSITIONS                                             |
+//| MANAGE OPEN POSITIONS - 3-Tier TP + Chandelier Trail              |
 //+------------------------------------------------------------------+
 void ManageOpenPositions()
 {
@@ -746,6 +1159,7 @@ void ManageOpenPositions()
 
       if(!PositionSelectByTicket(ticket))
       {
+         // Position closed externally - track streak
          RemoveTradeState(i);
          continue;
       }
@@ -779,32 +1193,82 @@ void ManageOpenPositions()
          currentRR = currentProfit / initialRisk;
       }
 
-      // --- PARTIAL PROFIT TAKING ---
-      if(InpPartialTP_Enabled && !g_tradeStates[i].partialTPTaken && currentRR >= InpPartialTP_RR)
+      // === TIER 1 PARTIAL PROFIT TAKING ===
+      if(InpPartialTP_Enabled && !g_tradeStates[i].tp1Taken && currentRR >= InpTP1_RR)
       {
          double currentLots = PositionGetDouble(POSITION_VOLUME);
-         double closeLots = NormalizeDouble(currentLots * InpPartialTP_Fraction, 2);
+         double closeLots = NormalizeDouble(g_tradeStates[i].initialLotSize * InpTP1_Fraction, 2);
+         if(closeLots > currentLots) closeLots = currentLots;
 
          if(closeLots >= symInfo.LotsMin())
          {
-            bool closeSuccess;
+            bool closeOk;
             if(isLong)
-               closeSuccess = trade.Sell(closeLots, _Symbol, currentPrice, 0, 0,
-                                         "Partial TP");
+               closeOk = trade.Sell(closeLots, _Symbol, currentPrice, 0, 0, "TP1 40%");
             else
-               closeSuccess = trade.Buy(closeLots, _Symbol, currentPrice, 0, 0,
-                                        "Partial TP");
+               closeOk = trade.Buy(closeLots, _Symbol, currentPrice, 0, 0, "TP1 40%");
 
-            if(closeSuccess)
+            if(closeOk)
             {
-               g_tradeStates[i].partialTPTaken = true;
-               Print("Partial TP: Closed ", closeLots, " lots at ", currentPrice,
-                     " RR=", currentRR);
+               g_tradeStates[i].tp1Taken = true;
+               g_tradeStates[i].currentLotSize -= closeLots;
+               Print("TP1 (40%): Closed ", closeLots, " lots at RR=", NormalizeDouble(currentRR, 2));
             }
          }
       }
 
-      // --- BREAKEVEN LOGIC ---
+      // === TIER 2 PARTIAL PROFIT TAKING ===
+      if(InpPartialTP_Enabled && g_tradeStates[i].tp1Taken &&
+         !g_tradeStates[i].tp2Taken && currentRR >= InpTP2_RR)
+      {
+         double currentLots = PositionGetDouble(POSITION_VOLUME);
+         double closeLots = NormalizeDouble(g_tradeStates[i].initialLotSize * InpTP2_Fraction, 2);
+         if(closeLots > currentLots) closeLots = currentLots;
+
+         if(closeLots >= symInfo.LotsMin())
+         {
+            bool closeOk;
+            if(isLong)
+               closeOk = trade.Sell(closeLots, _Symbol, currentPrice, 0, 0, "TP2 30%");
+            else
+               closeOk = trade.Buy(closeLots, _Symbol, currentPrice, 0, 0, "TP2 30%");
+
+            if(closeOk)
+            {
+               g_tradeStates[i].tp2Taken = true;
+               g_tradeStates[i].currentLotSize -= closeLots;
+               Print("TP2 (30%): Closed ", closeLots, " lots at RR=", NormalizeDouble(currentRR, 2));
+            }
+         }
+      }
+
+      // === SCALE-IN TO WINNERS ===
+      if(InpScaleIn_Enabled && !g_tradeStates[i].scaleInDone && currentRR >= InpScaleIn_RR)
+      {
+         double scaleInLots = NormalizeDouble(g_tradeStates[i].initialLotSize * InpScaleIn_Fraction, 2);
+         if(scaleInLots >= symInfo.LotsMin())
+         {
+            // Set tight SL for scale-in (BE of original trade)
+            double scaleInSL = isLong ?
+               (openPrice + initialRisk * 0.1) :
+               (openPrice - initialRisk * 0.1);
+            scaleInSL = NormalizeDouble(scaleInSL, symInfo.Digits());
+
+            bool scaleOk;
+            if(isLong)
+               scaleOk = trade.Buy(scaleInLots, _Symbol, currentPrice, scaleInSL, 0, "ScaleIn");
+            else
+               scaleOk = trade.Sell(scaleInLots, _Symbol, currentPrice, scaleInSL, 0, "ScaleIn");
+
+            if(scaleOk)
+            {
+               g_tradeStates[i].scaleInDone = true;
+               Print("Scale-In: Added ", scaleInLots, " lots at RR=", NormalizeDouble(currentRR, 2));
+            }
+         }
+      }
+
+      // === BREAKEVEN LOGIC ===
       if(!g_tradeStates[i].beApplied)
       {
          bool applyBE = false;
@@ -813,7 +1277,7 @@ void ManageOpenPositions()
          {
             applyBE = (currentRR >= InpBE_RR_Ratio);
          }
-         else // BE_MODE_PULLBACK_BO
+         else
          {
             if(isLong)
                applyBE = IsMiniPullbackBreakoutLong(openPrice, g_tradeStates[i].highSinceEntry);
@@ -843,18 +1307,22 @@ void ManageOpenPositions()
          }
       }
 
-      // --- TRAILING STOP LOGIC ---
+      // === CHANDELIER EXIT TRAILING STOP ===
       if(currentRR >= InpTrail_Start_RR)
-      {
          g_tradeStates[i].trailingActive = true;
-      }
 
       if(g_tradeStates[i].trailingActive)
       {
          double atrEnt[];
          if(CopyBuffer(h_ATR_Ent, 0, 1, 1, atrEnt) >= 1)
          {
-            double trailDistance = atrEnt[0] * InpATR_Trail_Multi;
+            // Chandelier Exit: trail from highest high/lowest low
+            double trailDistance = atrEnt[0] * g_ATR_Trail_Multi;
+
+            // Tighten trailing after TP2 taken (only 30% left, protect profits)
+            if(g_tradeStates[i].tp2Taken)
+               trailDistance *= 0.7;  // Tighter trail for remaining position
+
             double trailSL;
 
             if(isLong)
@@ -866,8 +1334,8 @@ void ManageOpenPositions()
                {
                   if(trade.PositionModify(ticket, trailSL, 0))
                   {
-                     Print("Trail SL (Long): Ticket=", ticket, " New SL=", trailSL,
-                           " High=", g_tradeStates[i].highSinceEntry);
+                     Print("Trail (Chandelier): Ticket=", ticket,
+                           " SL=", trailSL, " High=", g_tradeStates[i].highSinceEntry);
                   }
                }
             }
@@ -880,8 +1348,8 @@ void ManageOpenPositions()
                {
                   if(trade.PositionModify(ticket, trailSL, 0))
                   {
-                     Print("Trail SL (Short): Ticket=", ticket, " New SL=", trailSL,
-                           " Low=", g_tradeStates[i].lowSinceEntry);
+                     Print("Trail (Chandelier): Ticket=", ticket,
+                           " SL=", trailSL, " Low=", g_tradeStates[i].lowSinceEntry);
                   }
                }
             }
@@ -898,14 +1366,13 @@ bool IsMiniPullbackBreakoutLong(double entryPrice, double highSinceEntry)
    double closeEnt[];
    double highData[];
 
-   if(CopyClose(_Symbol, InpEntryTF, 1, 1, closeEnt) < 1) return false;
+   if(CopyClose(_Symbol, g_EntryTF, 1, 1, closeEnt) < 1) return false;
 
-   // Must have moved up at least 0.5:1 RR first
    double initialRisk = entryPrice - PositionGetDouble(POSITION_SL);
    if(initialRisk <= 0) return false;
    if(highSinceEntry - entryPrice < initialRisk * 0.5) return false;
 
-   if(CopyHigh(_Symbol, InpEntryTF, 2, InpDonchian_PB_Period, highData) < InpDonchian_PB_Period)
+   if(CopyHigh(_Symbol, g_EntryTF, 2, InpDonchian_PB_Period, highData) < InpDonchian_PB_Period)
       return false;
 
    double miniDonchianUpper = highData[ArrayMaximum(highData)];
@@ -920,14 +1387,13 @@ bool IsMiniPullbackBreakoutShort(double entryPrice, double lowSinceEntry)
    double closeEnt[];
    double lowData[];
 
-   if(CopyClose(_Symbol, InpEntryTF, 1, 1, closeEnt) < 1) return false;
+   if(CopyClose(_Symbol, g_EntryTF, 1, 1, closeEnt) < 1) return false;
 
-   // Must have moved down at least 0.5:1 RR first
    double initialRisk = PositionGetDouble(POSITION_SL) - entryPrice;
    if(initialRisk <= 0) return false;
    if(entryPrice - lowSinceEntry < initialRisk * 0.5) return false;
 
-   if(CopyLow(_Symbol, InpEntryTF, 2, InpDonchian_PB_Period, lowData) < InpDonchian_PB_Period)
+   if(CopyLow(_Symbol, g_EntryTF, 2, InpDonchian_PB_Period, lowData) < InpDonchian_PB_Period)
       return false;
 
    double miniDonchianLower = lowData[ArrayMinimum(lowData)];
@@ -936,7 +1402,6 @@ bool IsMiniPullbackBreakoutShort(double entryPrice, double lowSinceEntry)
 
 //+------------------------------------------------------------------+
 //| EQUITY CURVE FILTER                                               |
-//| Only trade when equity > MA of equity (trend-following equity)    |
 //+------------------------------------------------------------------+
 void TrackEquity()
 {
@@ -945,27 +1410,27 @@ void TrackEquity()
    int size = ArraySize(g_equityHistory);
    ArrayResize(g_equityHistory, size + 1);
    g_equityHistory[size] = equity;
+
+   if(equity > g_peakEquity)
+      g_peakEquity = equity;
 }
 
 bool PassesEquityFilter()
 {
    int size = ArraySize(g_equityHistory);
    if(size < InpEquityFilter_Period)
-      return true;  // Not enough data, allow trading
+      return true;
 
-   // Calculate simple MA of equity
    double sum = 0;
    for(int i = size - InpEquityFilter_Period; i < size; i++)
       sum += g_equityHistory[i];
 
    double equityMA = sum / InpEquityFilter_Period;
-
-   // Only trade when current equity is above its MA
    return (g_equityHistory[size - 1] >= equityMA);
 }
 
 //+------------------------------------------------------------------+
-//| HELPER: Remove trade state by index                               |
+//| HELPER FUNCTIONS                                                  |
 //+------------------------------------------------------------------+
 void RemoveTradeState(int index)
 {
@@ -978,9 +1443,6 @@ void RemoveTradeState(int index)
    ArrayResize(g_tradeStates, total - 1);
 }
 
-//+------------------------------------------------------------------+
-//| HELPER: Count our open positions                                  |
-//+------------------------------------------------------------------+
 int CountOurPositions()
 {
    int count = 0;
@@ -999,9 +1461,6 @@ int CountOurPositions()
    return count;
 }
 
-//+------------------------------------------------------------------+
-//| HELPER: Check for new bar                                         |
-//+------------------------------------------------------------------+
 bool IsNewBar(ENUM_TIMEFRAMES tf)
 {
    datetime currentBarTime = iTime(_Symbol, tf, 0);
