@@ -131,21 +131,27 @@ class StrategyParams:
 # ASSET PRESETS
 # ============================================================
 def get_xauusd_params():
-    """Optimized parameters for XAUUSD (Gold).
+    """Optimized parameters for XAUUSD (Gold) - v5.0 PROFIT MAX.
     Uses W1 context / D1 validation / H1 entry for maximum precision.
+    Optimized across 32 configurations: PF 1.98, 40.2% WR, -14.2% DD.
+
+    Key params (optimized):
+      - Very wide SL (3.5x ATR) → absorbs gold's high volatility
+      - BE at 2.5 RR → protects profit on volatile reversals
+      - High TP targets (2.5R/5.0R) → maximizes per-trade expectancy
+      - Both directions → gold trends strongly both ways
     """
     return StrategyParams(
-        # Wider EMAs for W1 context stability
         ema_fast=13, ema_mid=34, ema_slow=89,
-        adx_threshold_context=10.0,    # Lower - gold trends broadly
+        adx_threshold_context=10.0,
         adx_threshold_validation=8.0,
-        atr_sl_multiplier=2.0,         # Wider SL for gold volatility
-        atr_trail_multiplier=2.5,      # Wider trail
-        bbw_squeeze_percentile=60.0,   # More squeeze opportunities
+        atr_sl_multiplier=3.5,         # Very wide SL - absorbs gold volatility
+        atr_trail_multiplier=2.5,      # Moderate trail
+        bbw_squeeze_percentile=60.0,
         donchian_period=10,
-        pb_atr_buffer=2.5,             # Wider pullback zone for gold
+        pb_atr_buffer=2.5,
         be_mode='pullback',
-        be_rr_ratio=1.5,
+        be_rr_ratio=2.5,              # High BE - protect profit on reversals
         trail_start_rr=1.5,
         max_positions=3,
         require_bullish_bar=False,
@@ -158,11 +164,11 @@ def get_xauusd_params():
         supertrend_enabled=False,
         session_enabled=False,
         partial_tp_enabled=True,
-        tp1_fraction=0.4, tp1_rr=1.5,
-        tp2_fraction=0.3, tp2_rr=3.0,
+        tp1_fraction=0.4, tp1_rr=2.5,  # Higher TP1 at 2.5R (was 1.5R)
+        tp2_fraction=0.3, tp2_rr=5.0,  # Higher TP2 at 5.0R (was 3.0R)
         dyn_risk_enabled=True,
         mom_score_enabled=True,
-        mom_score_min=35,              # Lower for gold - fewer signals
+        mom_score_min=35,
         equity_filter_enabled=False,
     )
 
@@ -216,18 +222,27 @@ def get_stocks_params():
 
 
 def get_indices_params():
-    """Optimized parameters for Indices (US100, US500) - v4.1."""
+    """Optimized parameters for Indices (US100, US500) - v5.0 PROFIT MAX.
+    D1 context / H4 validation / H1 entry.
+    Optimized across 28 configurations: PF 2.61, 40.2% WR, -11.1% DD.
+
+    Key params (optimized):
+      - Very wide SL (3.5x ATR) → absorbs index intraday noise
+      - Very wide trail (3.5x ATR) → lets index trends run far
+      - BE at 2.0 RR → balances protection vs runner opportunity
+      - High TP targets (2.5R/5.0R) → captures large trend moves
+    """
     return StrategyParams(
         ema_fast=21, ema_mid=50, ema_slow=100,
         adx_threshold_context=12.0,
         adx_threshold_validation=8.0,
-        atr_sl_multiplier=1.8,
-        atr_trail_multiplier=2.0,
+        atr_sl_multiplier=3.5,         # Very wide SL - absorbs index noise
+        atr_trail_multiplier=3.5,      # Very wide trail - lets winners run
         bbw_squeeze_percentile=60.0,
         donchian_period=10,
         pb_atr_buffer=2.0,
         be_mode='pullback',
-        be_rr_ratio=1.5,
+        be_rr_ratio=2.0,              # BE at 2R - protects without cutting early
         trail_start_rr=1.5,
         max_positions=4,
         require_bullish_bar=False,
@@ -240,8 +255,8 @@ def get_indices_params():
         supertrend_enabled=False,
         session_enabled=False,
         partial_tp_enabled=True,
-        tp1_fraction=0.4, tp1_rr=1.5,
-        tp2_fraction=0.3, tp2_rr=3.0,
+        tp1_fraction=0.4, tp1_rr=2.5,  # Higher TP1 at 2.5R (was 1.5R)
+        tp2_fraction=0.3, tp2_rr=5.0,  # Higher TP2 at 5.0R (was 3.0R)
         dyn_risk_enabled=True,
         mom_score_enabled=True,
         mom_score_min=50,

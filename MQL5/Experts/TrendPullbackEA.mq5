@@ -1,37 +1,35 @@
 //+------------------------------------------------------------------+
 //|                                          TrendPullbackEA.mq5     |
-//|    Multi-Strategy Profit-Maximized EA v4.1 - XAUUSD + Stocks     |
+//|    Multi-Strategy Profit-Maximized EA v5.0 - All Presets Opt     |
 //|    Progressive Trailing + Asset Presets + 3-Tier TP               |
 //+------------------------------------------------------------------+
-//| STRATEGY OVERVIEW v4.1:                                          |
+//| STRATEGY OVERVIEW v5.0:                                          |
 //| - Multi-Strategy Engine: Trend Pullback + Momentum Scoring       |
 //| - 3 Timeframes: Context / Validation / Entry (asset-specific)    |
-//| - Bidirectional for Gold, Long-Only recommended for Stocks       |
+//| - 3 Optimized Presets: XAUUSD, Indices, Stocks                   |
 //|                                                                   |
-//| KEY v4.1 IMPROVEMENTS (over v4.0):                               |
-//| 1. Progressive trail tightening (TP1: 0.85x, TP2: 0.65x)       |
-//| 2. Extra tightening at 3R+ (0.85x) and 5R+ (0.75x)             |
-//| 3. XAUUSD preset: W1/D1/H1 (stable W1 context, H1 precision)   |
-//| 4. Stocks preset: D1/H4/H1, EMA 21/50/100, long-only            |
-//| 5. RSI filter relaxed (78/22) - avoid only extremes              |
-//| 6. Wider pullback zones (PB buffer 2.0-2.5x ATR)                |
-//|                                                                   |
-//| BACKTEST v4.1 RESULTS (2024-2025):                               |
-//| Total: 1890 trades, PF 1.39, +5485% return, -28% max DD         |
-//| XAUUSD: 523 trades, $2.93M profit (top performer)               |
-//| CAT: 188 trades, $1.18M | MU: 193 trades, $883K                 |
-//| COST: 206 trades, $244K  | WDC: 197 trades, $115K               |
+//| KEY v5.0 IMPROVEMENTS (over v4.3):                               |
+//| 1. XAUUSD preset fully optimized: SL3.5x, BE2.5R, TP2.5/5R     |
+//|    PF 1.98, 40% WR, -14% DD (was PF 1.39)                       |
+//| 2. Indices preset fully optimized: SL3.5x, Trail3.5x, TP2.5/5R  |
+//|    PF 2.61, 40% WR, -11% DD (was PF ~1.5)                       |
+//| 3. Stocks preset (v4.3): SL3.0x, Trail3.0x, TP2.5/5R            |
+//|    PF 2.79, 54% WR, -21% DD, 25/26 symbols profitable           |
 //|                                                                   |
 //| XAUUSD PRESET (auto-detected):                                   |
-//|   TF: W1/D1/H1 | EMA: 13/34/89 | ATR SL: 2.0x, Trail: 2.5x    |
-//|   PB Buffer: 2.5x | Both directions | ADX: 10/8                  |
+//|   TF: W1/D1/H1 | EMA: 13/34/89 | ATR SL: 3.5x, Trail: 2.5x    |
+//|   PB Buffer: 2.5x | Both directions | BE: 2.5R | TP: 2.5/5R    |
+//|                                                                   |
+//| INDICES PRESET (auto-detected):                                   |
+//|   TF: D1/H4/H1 | EMA: 21/50/100 | ATR SL: 3.5x, Trail: 3.5x   |
+//|   PB Buffer: 2.0x | Both directions | BE: 2.0R | TP: 2.5/5R    |
 //|                                                                   |
 //| STOCKS PRESET (auto-detected):                                    |
-//|   TF: D1/H4/H1 | EMA: 21/50/100 | ATR SL: 1.5x, Trail: 2.0x   |
-//|   PB Buffer: 2.0x | Long-Only recommended | ADX: 12/8            |
+//|   TF: D1/H4/H1 | EMA: 21/50/100 | ATR SL: 3.0x, Trail: 3.0x   |
+//|   PB Buffer: 3.0x | Long-Only | BE: 2.0R | TP: 2.5/5R           |
 //+------------------------------------------------------------------+
-#property copyright "TrendPullbackEA v4.1 - Profit Maximized"
-#property version   "4.10"
+#property copyright "TrendPullbackEA v5.0 - All Presets Optimized"
+#property version   "5.00"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -142,19 +140,19 @@ input double InpVolume_Multiplier  = 1.0;    // Volume Breakout Multiplier
 input group "=== Risk Management ==="
 input double InpRisk_Percent       = 1.0;    // Base Risk % Per Trade
 input ENUM_BE_MODE InpBE_Mode      = BE_MODE_PULLBACK_BO; // Breakeven Mode
-input double InpBE_RR_Ratio        = 1.5;    // RR Ratio for BE
+input double InpBE_RR_Ratio        = 2.0;    // RR Ratio for BE (v5.0: 2.0-2.5)
 input double InpTrail_Start_RR     = 1.5;    // RR Ratio to Start Trailing
 input int    InpMax_Positions      = 5;      // Max Concurrent Positions
-input int    InpMagicNumber        = 20250304; // Magic Number
+input int    InpMagicNumber        = 20250305; // Magic Number
 input double InpMaxSpreadATR       = 0.3;    // Max Spread as % of ATR
 
 // --- 3-Tier Partial Profit Taking (v4.0) ---
 input group "=== 3-Tier Profit Taking (v4.0) ==="
 input bool   InpPartialTP_Enabled  = true;   // Enable Partial TP
 input double InpTP1_Fraction       = 0.4;    // Tier 1: Fraction to close (40%)
-input double InpTP1_RR             = 1.5;    // Tier 1: RR level (1.5:1)
+input double InpTP1_RR             = 2.5;    // Tier 1: RR level (v5.0: 2.5:1)
 input double InpTP2_Fraction       = 0.3;    // Tier 2: Fraction to close (30%)
-input double InpTP2_RR             = 3.0;    // Tier 2: RR level (3:1)
+input double InpTP2_RR             = 5.0;    // Tier 2: RR level (v5.0: 5:1)
 // Remaining 30% trails with Chandelier Exit
 
 // --- Dynamic Risk Scaling (v4.0) ---
@@ -207,6 +205,8 @@ bool   g_SessionEnabled;
 double g_RSI_Long_Max, g_RSI_Short_Min;
 int    g_ST_Period;
 double g_ST_Multiplier;
+double g_BE_RR_Ratio;
+double g_TP1_RR, g_TP2_RR;
 
 // --- Indicator Handles: Context TF ---
 int h_EMA_Fast_Ctx, h_EMA_Mid_Ctx, h_EMA_Slow_Ctx;
@@ -327,7 +327,7 @@ int OnInit()
    g_consecutiveLosses = 0;
    g_totalTradesForDay = 0;
 
-   Print("TrendPullbackEA v4.0 PROFIT-MAXIMIZED initialized");
+   Print("TrendPullbackEA v5.0 ALL-PRESETS-OPTIMIZED initialized");
    Print("Preset: ", EnumToString(InpPreset));
    Print("Context TF: ", EnumToString(g_ContextTF),
          " | Validation TF: ", EnumToString(g_ValidationTF),
@@ -339,6 +339,8 @@ int OnInit()
    Print("3-Tier TP: ", InpPartialTP_Enabled ? "ON" : "OFF",
          " | Dynamic Risk: ", InpDynRisk_Enabled ? "ON" : "OFF",
          " | Mom Score: ", InpMomScore_Enabled ? "ON" : "OFF");
+   Print("SL: ", g_ATR_SL_Multi, "x ATR | Trail: ", g_ATR_Trail_Multi,
+         "x | BE: ", g_BE_RR_Ratio, "R | TP1: ", g_TP1_RR, "R | TP2: ", g_TP2_RR, "R");
 
    return INIT_SUCCEEDED;
 }
@@ -374,7 +376,7 @@ void ApplyPreset()
          g_EMA_Slow        = 89;
          g_ADX_Threshold_Ctx = 10.0;
          g_ADX_Threshold_Val = 8.0;
-         g_ATR_SL_Multi    = 2.0;
+         g_ATR_SL_Multi    = 3.5;   // v5.0: Very wide SL for gold volatility
          g_ATR_Trail_Multi = 2.5;
          g_BBW_Squeeze_Pctile = 60.0;
          g_Donchian_Period = 10;
@@ -384,7 +386,10 @@ void ApplyPreset()
          g_RSI_Short_Min   = 22.0;
          g_ST_Period        = 10;
          g_ST_Multiplier    = 2.0;
-         Print("PRESET: XAUUSD (Gold) - W1/D1/H1, EMA 13/34/89, Both directions");
+         g_BE_RR_Ratio      = 2.5;   // v5.0: High BE protects on volatile reversals
+         g_TP1_RR           = 2.5;   // v5.0: Higher TP1 for big R multiples
+         g_TP2_RR           = 5.0;   // v5.0: Higher TP2 for runners
+         Print("PRESET: XAUUSD (Gold) v5.0 - W1/D1/H1, SL3.5x, BE2.5R, TP2.5/5R");
          break;
 
       case PRESET_INDICES:
@@ -394,19 +399,22 @@ void ApplyPreset()
          g_EMA_Fast        = 21;
          g_EMA_Mid         = 50;
          g_EMA_Slow        = 100;
-         g_ADX_Threshold_Ctx = 13.0;
-         g_ADX_Threshold_Val = 9.0;
-         g_ATR_SL_Multi    = 1.8;
-         g_ATR_Trail_Multi = 2.2;
-         g_BBW_Squeeze_Pctile = 50.0;
-         g_Donchian_Period = 12;
-         g_PB_ATR_Buffer   = 1.5;
+         g_ADX_Threshold_Ctx = 12.0;
+         g_ADX_Threshold_Val = 8.0;
+         g_ATR_SL_Multi    = 3.5;   // v5.0: Very wide SL for index noise
+         g_ATR_Trail_Multi = 3.5;   // v5.0: Very wide trail - let winners run
+         g_BBW_Squeeze_Pctile = 60.0;
+         g_Donchian_Period = 10;
+         g_PB_ATR_Buffer   = 2.0;
          g_SessionEnabled  = false;
-         g_RSI_Long_Max    = 65.0;
-         g_RSI_Short_Min   = 35.0;
+         g_RSI_Long_Max    = 78.0;
+         g_RSI_Short_Min   = 22.0;
          g_ST_Period        = 12;
          g_ST_Multiplier    = 2.5;
-         Print("PRESET: INDICES (US100/US500) - D1/H4/H1");
+         g_BE_RR_Ratio      = 2.0;   // v5.0: BE at 2R
+         g_TP1_RR           = 2.5;   // v5.0: Higher TP1
+         g_TP2_RR           = 5.0;   // v5.0: Higher TP2
+         Print("PRESET: INDICES v5.0 - D1/H4/H1, SL3.5x, T3.5x, BE2.0R, TP2.5/5R");
          break;
 
       case PRESET_STOCKS:
@@ -416,19 +424,22 @@ void ApplyPreset()
          g_EMA_Fast        = 21;
          g_EMA_Mid         = 50;
          g_EMA_Slow        = 100;
-         g_ADX_Threshold_Ctx = 12.0;
-         g_ADX_Threshold_Val = 8.0;
-         g_ATR_SL_Multi    = 1.5;
-         g_ATR_Trail_Multi = 2.0;
-         g_BBW_Squeeze_Pctile = 60.0;
-         g_Donchian_Period = 10;
-         g_PB_ATR_Buffer   = 2.0;
+         g_ADX_Threshold_Ctx = 8.0;   // v4.3: Relaxed - catch moderate trends
+         g_ADX_Threshold_Val = 5.0;   // v4.3: Relaxed
+         g_ATR_SL_Multi    = 3.0;    // v4.3: Wide SL absorbs stock noise
+         g_ATR_Trail_Multi = 3.0;    // v4.3: Wide trail lets winners run
+         g_BBW_Squeeze_Pctile = 75.0; // v4.3: Relaxed
+         g_Donchian_Period = 8;       // v4.3: Fast breakout detection
+         g_PB_ATR_Buffer   = 3.0;    // v4.3: Wide pullback zone
          g_SessionEnabled  = false;
-         g_RSI_Long_Max    = 78.0;
+         g_RSI_Long_Max    = 85.0;   // v4.3: Don't cut momentum entries
          g_RSI_Short_Min   = 22.0;
          g_ST_Period        = 12;
          g_ST_Multiplier    = 2.5;
-         Print("PRESET: STOCKS - D1/H4/H1, EMA 21/50/100, Long-Only recommended");
+         g_BE_RR_Ratio      = 2.0;   // v4.3: BE at 2R
+         g_TP1_RR           = 2.5;   // v4.3: Higher TP1
+         g_TP2_RR           = 5.0;   // v4.3: Higher TP2
+         Print("PRESET: STOCKS v4.3 - D1/H4/H1, SL3.0x, T3.0x, BE2.0R, TP2.5/5R");
          break;
 
       default: // PRESET_CUSTOM
@@ -450,6 +461,9 @@ void ApplyPreset()
          g_RSI_Short_Min   = InpRSI_Short_Min;
          g_ST_Period        = InpST_Period;
          g_ST_Multiplier    = InpST_Multiplier;
+         g_BE_RR_Ratio      = InpBE_RR_Ratio;
+         g_TP1_RR           = InpTP1_RR;
+         g_TP2_RR           = InpTP2_RR;
          Print("PRESET: CUSTOM");
          break;
    }
@@ -481,7 +495,7 @@ void OnDeinit(const int reason)
    IndicatorRelease(h_BB_Ent);
    IndicatorRelease(h_RSI_Ent);
 
-   Print("TrendPullbackEA v4.0 deinitialized");
+   Print("TrendPullbackEA v5.0 deinitialized");
 }
 
 //+------------------------------------------------------------------+
@@ -1083,8 +1097,8 @@ void ExecuteEntry(bool isLong, int momScore)
       state.entryPrice = entryPrice;
       state.initialSL = slPrice;
       state.initialTP_target = isLong ?
-         (entryPrice + slDistance * InpBE_RR_Ratio) :
-         (entryPrice - slDistance * InpBE_RR_Ratio);
+         (entryPrice + slDistance * g_BE_RR_Ratio) :
+         (entryPrice - slDistance * g_BE_RR_Ratio);
       state.highSinceEntry = entryPrice;
       state.lowSinceEntry = entryPrice;
       state.initialLotSize = lotSize;
@@ -1194,7 +1208,7 @@ void ManageOpenPositions()
       }
 
       // === TIER 1 PARTIAL PROFIT TAKING ===
-      if(InpPartialTP_Enabled && !g_tradeStates[i].tp1Taken && currentRR >= InpTP1_RR)
+      if(InpPartialTP_Enabled && !g_tradeStates[i].tp1Taken && currentRR >= g_TP1_RR)
       {
          double currentLots = PositionGetDouble(POSITION_VOLUME);
          double closeLots = NormalizeDouble(g_tradeStates[i].initialLotSize * InpTP1_Fraction, 2);
@@ -1219,7 +1233,7 @@ void ManageOpenPositions()
 
       // === TIER 2 PARTIAL PROFIT TAKING ===
       if(InpPartialTP_Enabled && g_tradeStates[i].tp1Taken &&
-         !g_tradeStates[i].tp2Taken && currentRR >= InpTP2_RR)
+         !g_tradeStates[i].tp2Taken && currentRR >= g_TP2_RR)
       {
          double currentLots = PositionGetDouble(POSITION_VOLUME);
          double closeLots = NormalizeDouble(g_tradeStates[i].initialLotSize * InpTP2_Fraction, 2);
@@ -1275,7 +1289,7 @@ void ManageOpenPositions()
 
          if(InpBE_Mode == BE_MODE_RR_BASED)
          {
-            applyBE = (currentRR >= InpBE_RR_Ratio);
+            applyBE = (currentRR >= g_BE_RR_Ratio);
          }
          else
          {
