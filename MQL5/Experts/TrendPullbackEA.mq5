@@ -262,13 +262,37 @@ int    g_consecutiveLosses;
 int    g_totalTradesForDay;
 
 //+------------------------------------------------------------------+
+//| Detect broker-supported order fill mode                           |
+//+------------------------------------------------------------------+
+ENUM_ORDER_TYPE_FILLING DetectFillMode(string symbol)
+{
+   // Query the broker's supported filling modes for this symbol
+   long fillMode = SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
+
+   // Try FOK first (most common for market orders)
+   if((fillMode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK)
+      return ORDER_FILLING_FOK;
+
+   // Try IOC next
+   if((fillMode & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC)
+      return ORDER_FILLING_IOC;
+
+   // Fallback: ORDER_FILLING_RETURN (exchange-style, always supported as last resort)
+   return ORDER_FILLING_RETURN;
+}
+
+//+------------------------------------------------------------------+
 //| Expert initialization function                                    |
 //+------------------------------------------------------------------+
 int OnInit()
 {
    trade.SetExpertMagicNumber(InpMagicNumber);
    trade.SetDeviationInPoints(10);
-   trade.SetTypeFilling(ORDER_FILLING_IOC);
+
+   // Auto-detect broker's supported fill mode to avoid order fill errors
+   ENUM_ORDER_TYPE_FILLING fillMode = DetectFillMode(_Symbol);
+   trade.SetTypeFilling(fillMode);
+   Print("Fill mode set to: ", EnumToString(fillMode));
 
    if(!symInfo.Name(_Symbol))
    {
