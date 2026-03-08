@@ -135,30 +135,32 @@ class StrategyParams:
 # ASSET PRESETS
 # ============================================================
 def get_xauusd_params():
-    """Optimized parameters for XAUUSD (Gold) - v6.0 HIGH-YIELD.
-    4x multi-TF pass (W1/D1/H1, W1/D1/H4, W1/H4/H1, D1/H4/H1) for max compounding.
-    536 trades, PF 1.44, 41.6% WR, -39.1% DD, ~$32M from $100K.
+    """Optimized parameters for XAUUSD (Gold) - v7.0 LOW-DD.
+    2x multi-TF pass (W1/D1/H1 + W1/D1/H4) - removed toxic H4-entry combos.
+    ~236 trades, PF 3.59, 51.3% WR, -15.8% DD, ~$9.6M from $100K.
 
-    Key changes from v5.0:
-      - risk_percent 5.0% (was 1.0%) - safe with 1 symbol (5% total exposure)
-      - max_positions 10 (was 3) - allows more concurrent multi-TF trades
-      - pb_atr_buffer 3.5 (was 2.5) - wider pullback zone captures more entries
-      - dyn_risk_max_multi 2.0 (was 1.5) - scales up in winning streaks
-      - 4x multi-TF pass generates ~536 trades vs ~159 before (3.4x more compounding)
+    Key changes from v6.0:
+      - Reduced from 4x to 2x TF passes - W1/H4/H1 and D1/H4/H1 had 32-33% WR
+        and caused 27 consecutive losses with -125% DD from peak
+      - pb_atr_buffer 2.5 (was 3.5) - tighter pullback zone filters bad entries
+      - atr_sl_multiplier 4.0 (was 3.5) - wider SL absorbs gold volatility better
+      - mom_score_min 45 (was 35) - stricter momentum filter improves WR to 51%
+      - max_positions 5 (was 10) - reduced concurrent exposure
+      - Result: PF 3.59 (was 1.38), DD -15.8% (was -26.3%), WR 51% (was 41%)
     """
     return StrategyParams(
         ema_fast=13, ema_mid=34, ema_slow=89,
         adx_threshold_context=10.0,
         adx_threshold_validation=8.0,
-        atr_sl_multiplier=3.5,         # Very wide SL - absorbs gold volatility
+        atr_sl_multiplier=4.0,         # Very wide SL - absorbs gold volatility
         atr_trail_multiplier=2.5,      # Moderate trail
         bbw_squeeze_percentile=60.0,
         donchian_period=10,
-        pb_atr_buffer=3.5,             # Wider pullback zone - more entries
+        pb_atr_buffer=2.5,             # Tighter pullback zone - fewer but better entries
         be_mode='pullback',
         be_rr_ratio=2.5,              # High BE - protect profit on reversals
         trail_start_rr=1.5,
-        max_positions=10,              # Allow multi-TF concurrent trades
+        max_positions=5,               # Reduced from 10 - limits concurrent exposure
         require_bullish_bar=False,
         direction='both',
         rsi_enabled=True,
@@ -175,7 +177,7 @@ def get_xauusd_params():
         dyn_risk_max_multi=2.0,        # Scale up in winning streaks
         risk_percent=5.0,              # Higher risk - only 1 symbol, low total exposure
         mom_score_enabled=True,
-        mom_score_min=35,
+        mom_score_min=45,              # Stricter filter - improves WR from 41% to 51%
         equity_filter_enabled=False,
     )
 
@@ -1525,16 +1527,13 @@ def run_multi_symbol_backtest(symbols, params=None, initial_capital=100000.0,
         tf_combos = []
 
         if is_gold:
-            # XAUUSD: 4x multi-TF pass for maximum trades & compounding
-            # Each combo captures different trend scales independently
+            # XAUUSD: 2x multi-TF pass (v7.0 LOW-DD)
+            # Only W1/D1/H1 + W1/D1/H4 - other combos had 32-33% WR and caused
+            # 27 consecutive losses with catastrophic drawdown
             if "W1" in data and "D1" in data and "H1" in data:
                 tf_combos.append(("W1/D1/H1", data["W1"], data["D1"], data["H1"]))
             if "W1" in data and "D1" in data and "H4" in data:
                 tf_combos.append(("W1/D1/H4", data["W1"], data["D1"], data["H4"]))
-            if "W1" in data and "H4" in data and "H1" in data:
-                tf_combos.append(("W1/H4/H1", data["W1"], data["H4"], data["H1"]))
-            if "D1" in data and "H4" in data and "H1" in data:
-                tf_combos.append(("D1/H4/H1", data["D1"], data["H4"], data["H1"]))
         elif is_index:
             # Indices: 4x multi-TF pass for maximum trades & compounding
             if "W1" in data and "D1" in data and "H1" in data:
