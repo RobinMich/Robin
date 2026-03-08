@@ -1,20 +1,25 @@
 //+------------------------------------------------------------------+
 //|                                          TrendPullbackEA.mq5     |
-//|    Multi-Strategy Profit-Maximized EA v5.0 - All Presets Opt     |
-//|    Progressive Trailing + Asset Presets + 3-Tier TP               |
+//|    Multi-Strategy Profit-Maximized EA v6.0 - Orderflow Liq Map  |
+//|    Progressive Trailing + Asset Presets + 3-Tier TP + Orderflow  |
 //+------------------------------------------------------------------+
-//| STRATEGY OVERVIEW v5.0:                                          |
+//| STRATEGY OVERVIEW v6.0:                                          |
 //| - Multi-Strategy Engine: Trend Pullback + Momentum Scoring       |
 //| - 3 Timeframes: Context / Validation / Entry (asset-specific)    |
 //| - 3 Optimized Presets: XAUUSD, Indices, Stocks                   |
+//| - NEW: Orderflow Liquidity Map confirmation filter               |
 //|                                                                   |
-//| KEY v5.0 IMPROVEMENTS (over v4.3):                               |
-//| 1. XAUUSD preset fully optimized: SL3.5x, BE2.5R, TP2.5/5R     |
-//|    PF 1.98, 40% WR, -14% DD (was PF 1.39)                       |
-//| 2. Indices preset fully optimized: SL3.5x, Trail3.5x, TP2.5/5R  |
-//|    PF 2.61, 40% WR, -11% DD (was PF ~1.5)                       |
-//| 3. Stocks preset (v4.3): SL3.0x, Trail3.0x, TP2.5/5R            |
-//|    PF 2.79, 54% WR, -21% DD, 25/26 symbols profitable           |
+//| KEY v6.0 IMPROVEMENTS (over v5.0):                               |
+//| 1. Orderflow Liquidity Map proxy indicator integrated             |
+//|    - Cumulative Delta Proxy (volume * (close-open)/range)         |
+//|    - Flow Ribbon: Fast/Slow EMA crossover of cum delta            |
+//|    - Pivot-based liquidity level detection                         |
+//|    - Sweep detection for liquidity grabs                           |
+//| 2. Orderflow acts as entry confirmation filter                    |
+//|    - Bullish flow = confirm longs, Bearish flow = confirm shorts  |
+//|    - Proximity to liquidity levels = momentum score bonus          |
+//|    - Liquidity sweeps can trigger entries                          |
+//| 3. All previous v5.0 features preserved                           |
 //|                                                                   |
 //| XAUUSD PRESET (auto-detected):                                   |
 //|   TF: W1/D1/H1 | EMA: 13/34/89 | ATR SL: 3.5x, Trail: 2.5x    |
@@ -28,8 +33,8 @@
 //|   TF: D1/H4/H1 | EMA: 21/50/100 | ATR SL: 3.0x, Trail: 3.0x   |
 //|   PB Buffer: 3.0x | Long-Only | BE: 2.0R | TP: 2.5/5R           |
 //+------------------------------------------------------------------+
-#property copyright "TrendPullbackEA v5.0 - All Presets Optimized"
-#property version   "5.00"
+#property copyright "TrendPullbackEA v6.0 - Orderflow Liquidity Map"
+#property version   "6.00"
 #property strict
 
 #include <Trade\Trade.mqh>
@@ -179,6 +184,19 @@ input group "=== Equity Filter ==="
 input bool   InpEquityFilter       = true;   // Enable Equity Curve Filter
 input int    InpEquityFilter_Period = 50;    // Equity MA Period
 
+// --- Orderflow Liquidity Map (v6.0) ---
+input group "=== Orderflow Liquidity Map (v6.0) ==="
+input bool   InpOF_Enabled         = true;   // Enable Orderflow Confirmation
+input int    InpOF_PivotLen        = 5;      // Pivot Length for Liquidity Levels
+input int    InpOF_MaxLevels       = 20;     // Max Active Liquidity Levels
+input int    InpOF_FlowFastLen     = 8;      // Flow Fast EMA Period
+input int    InpOF_FlowSlowLen     = 21;     // Flow Slow EMA Period
+input double InpOF_FlowThreshold   = 0.3;    // Flow Normalized Signal Threshold
+input double InpOF_LiqProxATR      = 2.0;    // Liquidity Proximity (x ATR)
+input int    InpOF_MomBonus        = 15;     // Mom Score Bonus Near Liquidity
+input bool   InpOF_SweepEntry      = true;   // Allow Entry on Liquidity Sweep
+input int    InpOF_CumDeltaPeriod  = 50;     // Cum Delta StdDev Period
+
 // --- Pullback Zone ---
 input group "=== Pullback Zone ==="
 input double InpPB_ATR_Buffer      = 1.2;    // ATR buffer above/below EMA zone
@@ -207,6 +225,27 @@ int    g_ST_Period;
 double g_ST_Multiplier;
 double g_BE_RR_Ratio;
 double g_TP1_RR, g_TP2_RR;
+
+// --- Orderflow Liquidity Map state ---
+struct LiquidityLevel
+{
+   double price;
+   double volume;
+   bool   isHigh;     // true = resistance, false = support
+   bool   swept;
+   int    barIdx;
+};
+
+LiquidityLevel g_liqLevels[];
+int    g_liqLevelCount;
+double g_cumDelta;            // Cumulative delta proxy
+double g_flowFastEMA;         // Fast EMA of cum delta
+double g_flowSlowEMA;         // Slow EMA of cum delta
+double g_cumDeltaHistory[];   // For stdev calculation
+int    g_cumDeltaHistCount;
+bool   g_flowBullish;         // Current flow direction
+bool   g_prevFlowBullish;     // Previous flow direction (for crossover detection)
+int    g_ofBarCount;          // Bar counter for OF
 
 // --- Indicator Handles: Context TF ---
 int h_EMA_Fast_Ctx, h_EMA_Mid_Ctx, h_EMA_Slow_Ctx;
@@ -351,7 +390,19 @@ int OnInit()
    g_consecutiveLosses = 0;
    g_totalTradesForDay = 0;
 
-   Print("TrendPullbackEA v5.0 ALL-PRESETS-OPTIMIZED initialized");
+   // Initialize Orderflow state
+   ArrayResize(g_liqLevels, 0);
+   g_liqLevelCount = 0;
+   g_cumDelta = 0;
+   g_flowFastEMA = 0;
+   g_flowSlowEMA = 0;
+   ArrayResize(g_cumDeltaHistory, 0);
+   g_cumDeltaHistCount = 0;
+   g_flowBullish = false;
+   g_prevFlowBullish = false;
+   g_ofBarCount = 0;
+
+   Print("TrendPullbackEA v6.0 ORDERFLOW-LIQUIDITY initialized");
    Print("Preset: ", EnumToString(InpPreset));
    Print("Context TF: ", EnumToString(g_ContextTF),
          " | Validation TF: ", EnumToString(g_ValidationTF),
@@ -363,6 +414,10 @@ int OnInit()
    Print("3-Tier TP: ", InpPartialTP_Enabled ? "ON" : "OFF",
          " | Dynamic Risk: ", InpDynRisk_Enabled ? "ON" : "OFF",
          " | Mom Score: ", InpMomScore_Enabled ? "ON" : "OFF");
+   Print("Orderflow: ", InpOF_Enabled ? "ON" : "OFF",
+         " | Pivot: ", InpOF_PivotLen,
+         " | Flow: ", InpOF_FlowFastLen, "/", InpOF_FlowSlowLen,
+         " | Thresh: ", InpOF_FlowThreshold);
    Print("SL: ", g_ATR_SL_Multi, "x ATR | Trail: ", g_ATR_Trail_Multi,
          "x | BE: ", g_BE_RR_Ratio, "R | TP1: ", g_TP1_RR, "R | TP2: ", g_TP2_RR, "R");
 
@@ -519,7 +574,7 @@ void OnDeinit(const int reason)
    IndicatorRelease(h_BB_Ent);
    IndicatorRelease(h_RSI_Ent);
 
-   Print("TrendPullbackEA v5.0 deinitialized");
+   Print("TrendPullbackEA v6.0 deinitialized, OF levels: ", g_liqLevelCount);
 }
 
 //+------------------------------------------------------------------+
@@ -555,11 +610,18 @@ void OnTick()
    if(InpEquityFilter && !PassesEquityFilter())
       return;
 
+   // --- Update Orderflow indicators ---
+   if(InpOF_Enabled)
+      UpdateOrderflow();
+
    // --- Calculate momentum score ---
    int momScore = 100;  // Default max if scoring disabled
    if(InpMomScore_Enabled)
    {
       momScore = CalculateMomentumScore();
+      // Add liquidity proximity bonus
+      if(InpOF_Enabled)
+         momScore += GetLiquidityProximityBonus();
       if(momScore < InpMomScore_MinScore)
          return;
    }
@@ -571,7 +633,8 @@ void OnTick()
          CheckValidationConditions(true) &&
          CheckEntryConditions(true) &&
          CheckRSIFilter(true) &&
-         CheckSupertrendFilter(true))
+         CheckSupertrendFilter(true) &&
+         CheckOrderflowFilter(true))
       {
          ExecuteEntry(true, momScore);
          return;
@@ -585,7 +648,8 @@ void OnTick()
          CheckValidationConditions(false) &&
          CheckEntryConditions(false) &&
          CheckRSIFilter(false) &&
-         CheckSupertrendFilter(false))
+         CheckSupertrendFilter(false) &&
+         CheckOrderflowFilter(false))
       {
          ExecuteEntry(false, momScore);
       }
@@ -689,6 +753,255 @@ bool CheckSupertrendFilter(bool isLong)
       return isUptrend;
    else
       return !isUptrend;
+}
+
+//+------------------------------------------------------------------+
+//| ORDERFLOW LIQUIDITY MAP - Update on each new bar (v6.0)          |
+//| Calculates: Cumulative Delta Proxy, Flow Ribbon, Pivot Levels     |
+//+------------------------------------------------------------------+
+void UpdateOrderflow()
+{
+   // Get current bar OHLCV
+   double closeArr[], openArr[], highArr[], lowArr[];
+   long   volArr[];
+
+   int barsNeeded = InpOF_PivotLen * 2 + 1;
+   if(CopyClose(_Symbol, g_EntryTF, 1, barsNeeded, closeArr) < barsNeeded) return;
+   if(CopyOpen(_Symbol, g_EntryTF, 1, barsNeeded, openArr) < barsNeeded) return;
+   if(CopyHigh(_Symbol, g_EntryTF, 1, barsNeeded, highArr) < barsNeeded) return;
+   if(CopyLow(_Symbol, g_EntryTF, 1, barsNeeded, lowArr) < barsNeeded) return;
+   if(CopyTickVolume(_Symbol, g_EntryTF, 1, barsNeeded, volArr) < barsNeeded) return;
+
+   int last = barsNeeded - 1;
+
+   // === 1. DELTA PROXY: volume * (close - open) / spread ===
+   double spread = highArr[last] - lowArr[last];
+   if(spread < _Point) spread = _Point;
+   double deltaProxy = (double)volArr[last] * ((closeArr[last] - openArr[last]) / spread);
+
+   // Update cumulative delta
+   g_cumDelta += deltaProxy;
+
+   // Store history for stdev calculation
+   g_cumDeltaHistCount++;
+   ArrayResize(g_cumDeltaHistory, g_cumDeltaHistCount);
+   g_cumDeltaHistory[g_cumDeltaHistCount - 1] = g_cumDelta;
+
+   // === 2. FLOW RIBBON: Fast/Slow EMA of cum delta ===
+   double alphaFast = 2.0 / (InpOF_FlowFastLen + 1.0);
+   double alphaSlow = 2.0 / (InpOF_FlowSlowLen + 1.0);
+
+   if(g_ofBarCount == 0)
+   {
+      g_flowFastEMA = g_cumDelta;
+      g_flowSlowEMA = g_cumDelta;
+   }
+   else
+   {
+      g_flowFastEMA = alphaFast * g_cumDelta + (1.0 - alphaFast) * g_flowFastEMA;
+      g_flowSlowEMA = alphaSlow * g_cumDelta + (1.0 - alphaSlow) * g_flowSlowEMA;
+   }
+
+   // Detect crossover
+   g_prevFlowBullish = g_flowBullish;
+   g_flowBullish = (g_flowFastEMA > g_flowSlowEMA);
+
+   g_ofBarCount++;
+
+   // === 3. PIVOT LIQUIDITY LEVELS ===
+   // Check for pivot high/low at center bar (pivotLen bars back)
+   int center = InpOF_PivotLen;  // Middle of the lookback window
+
+   // Pivot High check
+   bool isPivotHigh = true;
+   for(int j = 1; j <= InpOF_PivotLen; j++)
+   {
+      if(highArr[center] <= highArr[center - j] || highArr[center] <= highArr[center + j])
+      {
+         isPivotHigh = false;
+         break;
+      }
+   }
+
+   if(isPivotHigh)
+   {
+      AddLiquidityLevel(highArr[center], (double)volArr[center], true);
+   }
+
+   // Pivot Low check
+   bool isPivotLow = true;
+   for(int j = 1; j <= InpOF_PivotLen; j++)
+   {
+      if(lowArr[center] >= lowArr[center - j] || lowArr[center] >= lowArr[center + j])
+      {
+         isPivotLow = false;
+         break;
+      }
+   }
+
+   if(isPivotLow)
+   {
+      AddLiquidityLevel(lowArr[center], (double)volArr[center], false);
+   }
+
+   // === 4. SWEEP DETECTION ===
+   // Check if current bar swept any active liquidity levels
+   for(int i = g_liqLevelCount - 1; i >= 0; i--)
+   {
+      if(g_liqLevels[i].swept) continue;
+
+      if(g_liqLevels[i].isHigh && highArr[last] >= g_liqLevels[i].price)
+      {
+         g_liqLevels[i].swept = true;
+      }
+      else if(!g_liqLevels[i].isHigh && lowArr[last] <= g_liqLevels[i].price)
+      {
+         g_liqLevels[i].swept = true;
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Add a liquidity level to the array                                |
+//+------------------------------------------------------------------+
+void AddLiquidityLevel(double price, double vol, bool isHigh)
+{
+   LiquidityLevel lvl;
+   lvl.price = price;
+   lvl.volume = vol;
+   lvl.isHigh = isHigh;
+   lvl.swept = false;
+   lvl.barIdx = g_ofBarCount;
+
+   g_liqLevelCount++;
+   ArrayResize(g_liqLevels, g_liqLevelCount);
+   g_liqLevels[g_liqLevelCount - 1] = lvl;
+
+   // Trim to max levels
+   if(g_liqLevelCount > InpOF_MaxLevels)
+   {
+      // Remove oldest
+      for(int i = 0; i < g_liqLevelCount - 1; i++)
+         g_liqLevels[i] = g_liqLevels[i + 1];
+      g_liqLevelCount--;
+      ArrayResize(g_liqLevels, g_liqLevelCount);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| ORDERFLOW CONFIRMATION FILTER (v6.0)                              |
+//| Requires bullish flow for longs, bearish flow for shorts          |
+//| Also allows entry on liquidity sweeps                              |
+//+------------------------------------------------------------------+
+bool CheckOrderflowFilter(bool isLong)
+{
+   if(!InpOF_Enabled)
+      return true;
+
+   // Need warmup bars for flow ribbon
+   if(g_ofBarCount < InpOF_FlowSlowLen + 10)
+      return true;
+
+   // Calculate normalized signal
+   double flowSignal = g_flowFastEMA - g_flowSlowEMA;
+   double normSignal = 0;
+
+   // Calculate stdev of cum delta for normalization
+   if(g_cumDeltaHistCount >= InpOF_CumDeltaPeriod)
+   {
+      double sum = 0, sumSq = 0;
+      int startIdx = g_cumDeltaHistCount - InpOF_CumDeltaPeriod;
+      for(int i = startIdx; i < g_cumDeltaHistCount; i++)
+      {
+         sum += g_cumDeltaHistory[i];
+         sumSq += g_cumDeltaHistory[i] * g_cumDeltaHistory[i];
+      }
+      double mean = sum / InpOF_CumDeltaPeriod;
+      double variance = (sumSq / InpOF_CumDeltaPeriod) - (mean * mean);
+      double stdev = (variance > 0) ? MathSqrt(variance) : 0;
+      if(stdev > 0)
+         normSignal = flowSignal / stdev;
+   }
+
+   // Check for recent liquidity sweep
+   bool recentSweepLow = false;
+   bool recentSweepHigh = false;
+   if(InpOF_SweepEntry)
+   {
+      for(int i = g_liqLevelCount - 1; i >= 0; i--)
+      {
+         if(!g_liqLevels[i].swept) continue;
+         if(g_ofBarCount - g_liqLevels[i].barIdx > 5) continue; // Only recent sweeps
+
+         if(!g_liqLevels[i].isHigh)
+            recentSweepLow = true;   // Swept support = potential long
+         else
+            recentSweepHigh = true;  // Swept resistance = potential short
+      }
+   }
+
+   // Detect bull/bear shift (crossover)
+   bool bullShift = (g_flowBullish && !g_prevFlowBullish);
+   bool bearShift = (!g_flowBullish && g_prevFlowBullish);
+
+   if(isLong)
+   {
+      // For longs: require bullish flow, bull shift, or swept support
+      bool hasFlow = g_flowBullish || normSignal > InpOF_FlowThreshold;
+      bool hasShift = bullShift;
+      bool hasSweep = recentSweepLow;
+
+      if(hasFlow || hasShift || hasSweep)
+         return true;
+
+      return false;
+   }
+   else
+   {
+      // For shorts: require bearish flow, bear shift, or swept resistance
+      bool hasFlow = !g_flowBullish || normSignal < -InpOF_FlowThreshold;
+      bool hasShift = bearShift;
+      bool hasSweep = recentSweepHigh;
+
+      if(hasFlow || hasShift || hasSweep)
+         return true;
+
+      return false;
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Get momentum score bonus for proximity to liquidity levels        |
+//+------------------------------------------------------------------+
+int GetLiquidityProximityBonus()
+{
+   if(!InpOF_Enabled || g_liqLevelCount == 0)
+      return 0;
+
+   // Get current price and ATR
+   double atrArr[];
+   if(CopyBuffer(h_ATR_Ent, 0, 1, 1, atrArr) < 1) return 0;
+   double atr = atrArr[0];
+   if(atr <= 0) return 0;
+
+   double currentPrice = symInfo.Last();
+   if(currentPrice <= 0) currentPrice = symInfo.Bid();
+
+   double proximityRange = atr * InpOF_LiqProxATR;
+
+   // Check if price is near any active (unswept) liquidity level
+   for(int i = g_liqLevelCount - 1; i >= 0; i--)
+   {
+      if(g_liqLevels[i].swept) continue;
+
+      double dist = MathAbs(currentPrice - g_liqLevels[i].price);
+      if(dist <= proximityRange)
+      {
+         return InpOF_MomBonus;  // Near a liquidity level = bonus
+      }
+   }
+
+   return 0;
 }
 
 //+------------------------------------------------------------------+
