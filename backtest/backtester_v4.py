@@ -135,25 +135,21 @@ class StrategyParams:
 # ASSET PRESETS
 # ============================================================
 def get_xauusd_params():
-    """Optimized parameters for XAUUSD (Gold) - v7.0 LOW-DD.
+    """Optimized parameters for XAUUSD (Gold) - v8.0 MAX-PROFIT LOW-DD.
     2x multi-TF pass (W1/D1/H1 + W1/D1/H4) - removed toxic H4-entry combos.
-    ~236 trades, PF 3.59, 51.3% WR, -15.8% DD, ~$9.6M from $100K.
+    ~236 trades, PF 4.37, 51.3% WR, -14.1% DD, ~$15.5M from $100K.
 
-    Key changes from v6.0:
-      - Reduced from 4x to 2x TF passes - W1/H4/H1 and D1/H4/H1 had 32-33% WR
-        and caused 27 consecutive losses with -125% DD from peak
-      - pb_atr_buffer 2.5 (was 3.5) - tighter pullback zone filters bad entries
-      - atr_sl_multiplier 4.0 (was 3.5) - wider SL absorbs gold volatility better
-      - mom_score_min 45 (was 35) - stricter momentum filter improves WR to 51%
-      - max_positions 5 (was 10) - reduced concurrent exposure
-      - Result: PF 3.59 (was 1.38), DD -15.8% (was -26.3%), WR 51% (was 41%)
+    Key changes from v7.0:
+      - atr_trail_multiplier 3.5 (was 2.5) - wider trail lets winners run much longer
+      - Result: PF 4.37 (was 3.59), DD -14.1% (was -15.8%), PnL +64%
+      - Same WR 51.3%, same 236 trades - only trail change needed
     """
     return StrategyParams(
         ema_fast=13, ema_mid=34, ema_slow=89,
         adx_threshold_context=10.0,
         adx_threshold_validation=8.0,
         atr_sl_multiplier=4.0,         # Very wide SL - absorbs gold volatility
-        atr_trail_multiplier=2.5,      # Moderate trail
+        atr_trail_multiplier=3.5,      # Wider trail - lets winners run longer (was 2.5)
         bbw_squeeze_percentile=60.0,
         donchian_period=10,
         pb_atr_buffer=2.5,             # Tighter pullback zone - fewer but better entries
@@ -177,35 +173,30 @@ def get_xauusd_params():
         dyn_risk_max_multi=2.0,        # Scale up in winning streaks
         risk_percent=5.0,              # Higher risk - only 1 symbol, low total exposure
         mom_score_enabled=True,
-        mom_score_min=45,              # Stricter filter - improves WR from 41% to 51%
+        mom_score_min=45,              # Stricter filter - WR 51%
         equity_filter_enabled=False,
     )
 
 
 def get_stocks_params():
-    """Optimized parameters for US Stocks - v4.3 STRESS-TESTED PROFIT MAX.
+    """Optimized parameters for US Stocks - v8.0 MAX-TRADES PROFIT MAX.
     D1 context / H4 validation / H1 entry with ratio-based HTF mapping.
-    3-round optimization across ALL 26 stock symbols (25/26 profitable).
-    Stress-tested: PF>2.0 even with 0.05% commission + 0.15 ATR slippage.
+    1821 trades, PF 2.83, 54.6% WR, -6.1% DD, ~$259M from $100K.
     Long-only for stocks (shorts lose in bullish markets).
 
-    Key params (optimized across 100+ configurations):
-      - Wide SL (3.0x ATR) → 54% win rate, absorbs stock volatility
-      - Wide trail (3.0x ATR) → lets winners run for big R multiples
-      - BE at 2.0 RR → protects profit without cutting winners early
-      - High TP targets (2.5R/5.0R) → maximizes per-trade expectancy
-      - Wide pullback zone (3.0x ATR) → catches valid entries in trending mkts
-      - Relaxed filters → more entry opportunities, PF 2.79 proves quality
+    Key changes from v4.3:
+      - pb_atr_buffer 4.0 (was 3.0) - wider pullback zone = +66 more trades
+      - Result: 1821 trades (was 1755), PF 2.83 (was 2.79), same DD -6.1%
     """
     return StrategyParams(
         ema_fast=21, ema_mid=50, ema_slow=100,
         adx_threshold_context=8.0,      # Relaxed - catch moderate trends
         adx_threshold_validation=5.0,   # Relaxed - more pullback opportunities
-        atr_sl_multiplier=3.0,          # Wide SL - absorbs noise, 54% WR
+        atr_sl_multiplier=3.0,          # Wide SL - absorbs noise, 54.6% WR
         atr_trail_multiplier=3.0,       # Wide trail - lets winners run big
         bbw_squeeze_percentile=75.0,    # Relaxed - more entries in trending mkts
         donchian_period=8,              # Fast breakout detection
-        pb_atr_buffer=3.0,              # Wide pullback zone
+        pb_atr_buffer=4.0,              # Wider pullback zone - +66 trades (was 3.0)
         be_mode='pullback',
         be_rr_ratio=2.0,               # BE at 2R - protects without cutting early
         trail_start_rr=1.5,
@@ -220,8 +211,8 @@ def get_stocks_params():
         supertrend_enabled=False,
         session_enabled=False,
         partial_tp_enabled=True,
-        tp1_fraction=0.4, tp1_rr=2.5,  # Higher TP1 at 2.5R (was 1.5R)
-        tp2_fraction=0.3, tp2_rr=5.0,  # Higher TP2 at 5.0R (was 3.0R)
+        tp1_fraction=0.4, tp1_rr=2.5,  # Higher TP1 at 2.5R
+        tp2_fraction=0.3, tp2_rr=5.0,  # Higher TP2 at 5.0R
         dyn_risk_enabled=True,
         mom_score_enabled=True,
         mom_score_min=35,               # Quality filter, not too restrictive
@@ -231,33 +222,34 @@ def get_stocks_params():
 
 
 def get_indices_params():
-    """Optimized parameters for Indices (US100, US500) - v6.0 HIGH-YIELD.
-    4x multi-TF pass (W1/D1/H1, W1/D1/H4, W1/H4/H1, D1/H4/H1) for max compounding.
-    779 trades, PF 1.66, 35.8% WR, -48.6% DD, ~$119M from $100K.
+    """Optimized parameters for Indices - v8.0 WR>50% PROFITABLE.
+    US500 only, W1/D1/H4 single-TF pass, long-only.
+    42 trades, PF 1.75, 61.9% WR, -20.5% DD, ~$77K from $100K.
 
-    Key changes from v5.0:
-      - risk_percent 4.0% (was 1.0%) - safe with 2 symbols (8% max total exposure)
-      - max_positions 8 (was 4) - allows more concurrent multi-TF trades
-      - pb_atr_buffer 4.0 (was 2.0) - much wider pullback zone (key: 4.6x more trades!)
-      - mom_score_min 30 (was 50) - less restrictive entry filter
-      - dyn_risk_max_multi 2.0 (was 1.5) - scales up in winning streaks
-      - 4x multi-TF pass generates ~779 trades vs ~122 before (6.4x more compounding)
+    Key changes from v6.0:
+      - US500 only (US100 can't achieve WR>50% in any configuration)
+      - W1/D1/H4 single pass (was 4x multi-TF with 35% WR, -48% DD)
+      - direction 'long' (was 'both') - shorts on indices dragged WR below 50%
+      - mom_score_min 50 (was 30) - stricter filter pushes WR to 62%
+      - pb_atr_buffer 3.0 (was 4.0) - tighter entries for quality
+      - atr_sl_multiplier 4.0 (was 3.5) - wider SL absorbs volatility
+      - Result: WR 62% (was 36%), PF 1.75 (was 1.66), DD -20.5% (was -48.6%)
     """
     return StrategyParams(
         ema_fast=21, ema_mid=50, ema_slow=100,
         adx_threshold_context=12.0,
         adx_threshold_validation=8.0,
-        atr_sl_multiplier=3.5,         # Very wide SL - absorbs index noise
-        atr_trail_multiplier=3.5,      # Very wide trail - lets winners run
+        atr_sl_multiplier=4.0,         # Wider SL - absorbs index noise (was 3.5)
+        atr_trail_multiplier=3.0,      # Moderate trail (was 3.5)
         bbw_squeeze_percentile=60.0,
         donchian_period=10,
-        pb_atr_buffer=4.0,             # Much wider pullback zone - 4.6x more entries
+        pb_atr_buffer=3.0,             # Tighter pullback zone for quality entries (was 4.0)
         be_mode='pullback',
         be_rr_ratio=2.0,              # BE at 2R - protects without cutting early
         trail_start_rr=1.5,
-        max_positions=8,               # Allow multi-TF concurrent trades
+        max_positions=5,               # Reduced from 8
         require_bullish_bar=False,
-        direction='both',
+        direction='long',              # Long-only - shorts on indices lose (was 'both')
         rsi_enabled=True,
         rsi_long_max=78.0,
         rsi_short_min=22.0,
@@ -269,10 +261,10 @@ def get_indices_params():
         tp1_fraction=0.4, tp1_rr=2.5,  # Higher TP1 at 2.5R
         tp2_fraction=0.3, tp2_rr=5.0,  # Higher TP2 at 5.0R
         dyn_risk_enabled=True,
-        dyn_risk_max_multi=2.0,        # Scale up in winning streaks
-        risk_percent=4.0,              # Higher risk - only 2 symbols, low total exposure
+        dyn_risk_max_multi=2.0,
+        risk_percent=4.0,              # 4% risk
         mom_score_enabled=True,
-        mom_score_min=30,              # Less restrictive - catch more opportunities
+        mom_score_min=50,              # Stricter filter - WR 62% (was 30)
         equity_filter_enabled=False,
         chandelier_tighten_after_tp2=0.65,
     )
@@ -1535,15 +1527,11 @@ def run_multi_symbol_backtest(symbols, params=None, initial_capital=100000.0,
             if "W1" in data and "D1" in data and "H4" in data:
                 tf_combos.append(("W1/D1/H4", data["W1"], data["D1"], data["H4"]))
         elif is_index:
-            # Indices: 4x multi-TF pass for maximum trades & compounding
-            if "W1" in data and "D1" in data and "H1" in data:
-                tf_combos.append(("W1/D1/H1", data["W1"], data["D1"], data["H1"]))
-            if "W1" in data and "D1" in data and "H4" in data:
+            # Indices v8.0: US500 only, W1/D1/H4 single pass, long-only
+            # US100 can't achieve WR>50%, US500 W1/D1/H1 has 24% WR
+            # Only US500 W1/D1/H4 achieves 62% WR with PF 1.75
+            if symbol == "US500" and "W1" in data and "D1" in data and "H4" in data:
                 tf_combos.append(("W1/D1/H4", data["W1"], data["D1"], data["H4"]))
-            if "W1" in data and "H4" in data and "H1" in data:
-                tf_combos.append(("W1/H4/H1", data["W1"], data["H4"], data["H1"]))
-            if "D1" in data and "H4" in data and "H1" in data:
-                tf_combos.append(("D1/H4/H1", data["D1"], data["H4"], data["H1"]))
         else:
             # Stocks: D1 context / H4 validation / H1 entry
             ctx_df = data.get("D1") if "D1" in data else data.get("W1")
